@@ -1,0 +1,229 @@
+---
+title: "Création des data frame de travail pour l'état des lieux hydromorphologique
+  des cours d'eau de Hauts-de-France - volet 1"
+author: "Imane PALAGI"
+date: '`r Sys.Date()`'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message=FALSE, warning=FALSE)
+```
+
+Le but de ce document est de créer des data frame de données à partir desquels travailler pour le projet "état des lieux de l'hydromorphologie des cours d'eau de Hauts-de-France". Ces données seront essentiellement issues des protocoles Carhyce (caractérisation hydromorphologique à l'échelle de la station). Les tableaux de données initiaux seront issus d'exports depuis l'IED Carhyce (lien : <https://analytics.huma-num.fr/ied_carhyce/>) au format csv.
+
+Les exports IED Carhyce se font par HER 1, cours d'eau ou station. Les données importées initiallement seront donc celles de toutes les stations des HER 1 présentes en Hauts-de-France, à savoir :
+
+-   Les tables calcaires 
+-   Les dépots argilo-sableux
+-   Les ardennes
+-   Les côtes calcaires Est
+
+[Remarque :]{.underline} Les fichiers csv téléchargés depuis l'IED Carhyce n'ont pas besoin d'être reformatés pour être importés proprement dans R, mais l'ouverture du fichier csv en lui même (application Office) peu générer un soucis d'encodage pour les caractères spéciaux.
+
+```{r}
+#installation et/ou chargement des packages necessaires 
+
+if (!require(pacman)) install.packages("pacman") 
+
+pacman::p_load(tidyverse, hubeau, FloodFreqPlot, janitor, openxlsx) # installe les packages non installés et charge tout
+
+
+```
+
+# I) Construction du data frame des données brutes Hauts-de-France
+
+Cette manipulation consiste à filtrer les stations des Hauts-de-France dans le data frame de données totales des HER présents en Hauts-de-France. Elle necessitera donc d'avoir la liste des stations Carhyce de Hauts-de-France et le data frame propre pour les HER de la région. 
+
+```{r}
+# importation des exports IED télchargés localement 
+
+TC<-read.csv2("raw_data/1_Export_tables_calcaires.csv")
+AS<-read.csv2("raw_data/1_Export_depots_argilo_sableux.csv")
+CCE<-read.csv2("raw_data/1_Export_cotes_calcaires_est.csv")
+A<-read.csv2("raw_data/1_Export_ardennes.csv")
+
+```
+
+```{r}
+# jointure des df des différents HER 
+
+IED_joint<-rbind(TC,AS,CCE,A)
+
+IED_joint<-IED_joint %>% 
+  clean_names() %>%  # fonction qui génère des noms de colonne propres 
+  mutate(date_realisation=as.Date(date_realisation, # changement de format 
+         version_protocole=as.factor(version_protocole),
+         nom_her_ou_dom_dominant=as.factor(nom_her_ou_dom_dominant))) %>% 
+  rename(Date=date_realisation, # renommer certaines colonnes (noms plus courts)
+         Code_sta=code_station, 
+         Libelle_sta = localisation_station_de_mesure,
+         Nom_HER_dom=nom_her_ou_dom_dominant,
+         Q_plein_bord=debit_plein_bord_m3_s) 
+
+```
+
+Les codes stations utilisés dans un premier temps sont les codes de l'ensemble des stations d'hydromorphologie prospectées en Hauts-de-France selon le protocole Carhyce étant disponibles sur l'IED. Elles comprennent les prospections OFB mais également celles de divers bureaux d'études. 
+
+Sur l'IED Carhyce, il n'existe pas de champs de région ou de département. Les stations sont identifiées par HER uniquement. Le filtre sur la région Hauts-de-France necessite donc un vecteur des codes de stations Carhyce dans les Hauts-de-France. Celui-ci a été obtenu préalablement par affichage des stations Carhyce totale disponibles sur les HER de Hauts-de-France puis intersection de ces stations avec la couche des limites administratives de la région. 
+
+```{r}
+# import des codes de stations Hdf 
+
+load(file="raw_data/1_codes_stations_hdf.RData")
+
+```
+
+```{r}
+# filtre du df de données Carhyce IED sur les stations de Hdf 
+
+carhyce_hdf<-IED_joint %>% 
+  filter(Code_sta %in% codes_IED_vec)
+
+#filtre du df de données Carhyce sur les stations de Hdf de l'OFB 
+
+carhyce_hdf_ofb<-carhyce_hdf %>% 
+  filter(structure_responsable=="OFFICE FRANCAIS DE LA BIODIVERSITE") 
+```
+
+Sur l'IED Carhyce, certaines stations présentent un code et un libelle station différents pour des coordonnées identiques. C'est le cas des stations de la Slack et de l'Helpe mineure, qui ont probablement été renommées/recodées en cours de protocole.  
+
+Pour les stations de la Slack et de l'Helpe mineure, tous les résultats des opérations seront assimilés aux codes et libellé de la dernière opération en date afin d'éviter des soucis dans le traitement des données. **Attention : le data frame résultant de cette opération sera donc modifié par rapport aux données exactes de stations disponibles sur l'IED Carhyce**.
+
+```{r}
+# remplacement du code et libellé de station pour la Slack et l'Helpe 
+
+## Remplacement des codes/noms de la Slack à Ambleteuse par ceux de la Slack à Rinxent et de l'Helpe mineure à maroilles par l'Helpe mineure à grand fayt 
+
+carhyce_hdf_ofb<-carhyce_hdf_ofb %>% 
+  mutate(Code_sta=as.character(Code_sta)) %>% 
+   mutate(Code_sta = recode(Code_sta, "1090000" = "1000477", 
+                            "1006000" = "1001131", 
+                            .default = Code_sta),
+         Libelle_sta = recode(Libelle_sta, "LA SLACK Ã€ AMBLETEUSE (62)" = "LA SLACK Ã€ RINXENT (62)", 
+                              "L'HELPE MINEURE Ã€ MAROILLES (59)" = "HELPE MINEURE Ã€ GRAND FAYT (59)", 
+                              .default = Libelle_sta)) 
+```
+
+```{r, echo=FALSE}
+save(carhyce_hdf, carhyce_hdf_ofb, file="output/1_df_carhyce_hdf.RData")
+```
+ 
+# II) Calcul des métriques à étudier
+
+Les métriques /indicateurs à étudier sur lesquelles le comité de pilotage du projet s'est mis d'accord sont :
+
+-   Le rapport largeur/profondeur (mouillé et de plein bord)
+-   Le rapport du débit de plein bord avec le débit de la crue biennale
+-   Un indicateur relatif à la ripisylve à choisir (score ripisylve ?)
+-   Un indicateur relatif à la granulométrie à choisir (Indice de shanon granulométrique ?)
+-   Eventuellement la puissance spécifique du cours d'eau
+
+Certaines métriques sont déjà disponibles telles quelles dans le data frame carhyce_hdf_ofb :
+
+-   Le rapport largeur mouillée /profondeur = L_sur_Profondeur_Q1
+-   Le rapport largeur plein bord /profondeur = L_sur_Profondeur_Qb
+-   La puissance spécifique de plein bord = Puissance_spe_Qb
+-   Le score rpisisylve = Score_ripisylve
+-   L'indice de Shannon granulométrique = Indice_Shannon_granulo
+
+Finalement, seul le rapport débit de plein bord et de la crue biennale est à calculer. Le débit de plein bord (en m3/s) est disponible dans le data frame carhyce_hdf_ofb issu de l'IED (Q_plein_bord). Le débit correspondant à la crue biennale (Q2) à l'endroit de la station Carhyce sera calculé en suivant la méthode suivante (exemple pour une station) :
+
+-   Sélectionner une station hydrométrique proche de la station Carhyce sur le même cours d'eau (ou si impossible, sur un cours d'eau voisin dont le bassin versant présente des conditions d'infiltration similaires) (opération réalisée sur QGis)
+
+-   Importer la valeur du débit de crue biennale à l'endroit de la station d'hydrométrie (Q2(h)) ainsi que la surface du bassin versant (BV) amont à la station (Sh)
+
+-   Joindre la surface de BV amont à la station Carhyce (Sc)
+
+-   Calculer le Q2 à l'endroit de la station Carhyce (Q2(c)) à l'aide de la formule de Myer :
+
+    \*\*Q2(c)=Q2(h)\*(Sc/Sh)\^0,8\*\*
+
+La formule de Myer sera appliquée pour toutes les stations Carhyce qui ne disposent pas de station hydrométrique à proximité immédiate sur le même cours d'eau. Lors du repérage des stations hydro à utiliser, une colonne "Superposition" a été remplie, informant sur la position de la station hydro selectionnée : 
+- TRUE = la station hydro est positionnée à moins de 500m de la station carhyce, sur le même cours d'eau, sans obstacle à l'écoulement ou affluent/confluent les séparant. Dans ce cas, le Q2 de la station hydro sera utlisé directement, sans recalcul avec la formule de Myer. 
+- FALSE = le Q2 doit être recalculé à l'endroit de la station Carhyce
+
+
+Les données necessaires à la formule de Myer sont, telles que listées ci-dessus :
+
+-   Q2(h) le débit de crue biennale à l'endroit de la station d'hydrométrie, disponible au téléchargement sur l'Hydro Portail
+-   Sh la surface de BV en amont de la station d'hydrométrie, disponible dans le même data frame que les Q2
+-   Sc la surface de BV en amont de la station Carhcye, disponible dans les données Carhyce brutes (Surface_BV)
+
+Pour l'importation des informations des sites hydro dans les hdf :
+
+La création d'un data frame inculant l'indicateur Qb_Q2 pour chaque station Carhyce se fait à partir d'une fonction "function_Qb_Q2" (cf. file="function/1_Mise_en_forme.R").
+
+La fonction necessitera d'avoir déjà à disposition :
+
+-   un objet contenant le code de la région à étudier au format caractère (code_region)
+-   un data frame issu de l'export des données de Q2 de la Banque Hydro, dont les colonnes ont été renommées comme suit (obligatoire pour Code_sta, Surface_BV_topo et Q2_m3, faculctatifs pour les autres colonnes) :
+
+```{r}
+Q2_fr <-read.csv("raw_data/1_Q2_fr.csv") # import du data frame de Q2 téléchargé 
+                                         # depuis l'Hydro Portail 
+
+Q2_fr<-Q2_fr %>%   
+  clean_names() %>%   # renommer les colonnes : 
+  rename(Code_sta= code_de_l_entite,
+         Surface_BV_hydro=surface_de_bassin_versant_hydrologique_km,
+         Surface_BV_topo=surface_de_bassin_versant_topographique_km,
+         Q2_m3 = debit_m_s) %>% 
+  mutate(latitude = as.numeric(latitude), #changer de format de colonnes 
+         longitude= as.numeric(longitude), 
+         Code_sta= as.factor(Code_sta),
+         Surface_BV_hydro= as.numeric(Surface_BV_hydro),
+         Surface_BV_topo= as.numeric(Surface_BV_topo),
+         Q2_m3 = as.numeric(Q2_m3)) 
+
+colnames(Q2_fr) #afficher les noms de colonnes 
+
+```
+
+-   un data frame contenant le croisement spatial des stations carhyce et des stations de débit, c'est à dire la correspondance entre les stations carhyce pour lesquelles ont veut avoir une valeur de Q2 et les stations de débit selectionnées pour calculer le Q2 à partir de la formule de Myer (croisement à faire soi-même avec l'outil de son choix, comme QGis par exemple). Ce data frame devra être construit de la manière suivante :
+
+```{r}
+hydro_carhyce<-read.xlsx("raw_data/1_croisement_carhyce_debits.xlsx")
+
+head(hydro_carhyce,2)
+```
+
+Les colonnes indispensables sont : code_sta_HM (le code de la station carhyce), code_sta_hydro (le code de la station de débits), superposition (si TRUE, la station de débit est quasiment superposée à la station Carhyce et la valeur de Q2 de la station de débit peut être conservée sans recalcul avec la formule de Myer) et code_site_hydro (le code du site hydro de la station de débit). Les autres colonnes sont là pour améliorer la compréhension uniquement.
+
+- Le data frame des données Carhyce tel que construit en partie I) 
+
+```{r}
+# application de la fonction "function_Qb_Q2" 
+
+hydro_carhyce_vf <-function_Qb_Q2("32", Q2_fr, hydro_carhyce)
+```
+
+Le data frame résultant est du type : 
+
+```{r}
+head(hydro_carhyce_vf,2) 
+```
+```{r}
+save(hydro_carhyce_vf, file="processed_data/1_Qb_Q2.RData")
+```
+
+# Annexe 
+
+Dans le cas où les données de Q2 ne sont pas disponibles ou qu'on ne souhaite pas les importer depuis l'Hydro Portail, il est également possible de les recalculer à partir des chroniques de débits journaliers. Pour cela, une fonction "function_QT" (cf. file="functions/1_Mise_en_forme.R") est crée, se basant sur la fonction ProbPlot du package "FloodFreqPlot". 
+**Attention: les valeurs de Q2 résultantes de cette méthode de calcul ne seront pas forcément les mêmes que sur l'Hydro Portail, du fait de l'incertitude de la valeur de Q2** (mais elles sont sensées se situer dans l'intervalle de confiance affiché sur l'Hydro Portail). 
+
+La fonction de calcul du débit de crue de période de retour T à l'endroit d'une stations pour laquelle on dispose d'une chronique de débits sur l'Hydro Portail necessitera d'avoir les informations suivantes :
+
+-   le code de la station en question au format caractère (code_station)
+-   les dates de début et de fin de la chronique de débits sur laquelle on souhaite calculer le Q2 au format caractère année-mois-jour (debut et fin)
+-   la période de retour Tr pour laquelle on souhaite calculer le débit de crue (par exemple T=2 pour la crue biennale) au format numérique
+
+Un exemple est donné ci-après pour la station de l'Authie à Dompierre : 
+
+```{r}
+function_QT("E5505720", "1973-01-01", "2022-12-31", 2)
+```
+
+
+
+
