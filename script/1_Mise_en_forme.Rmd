@@ -2,8 +2,10 @@
 title: "Création des data frame de travail pour l'état des lieux hydromorphologique
   des cours d'eau de Hauts-de-France - volet 1"
 author: "Imane PALAGI"
-date: '`r Sys.Date()`'
-output: html_document
+date: "`r Sys.Date()`"
+output:
+  html_document: default
+  pdf_document: default
 ---
 
 ```{r setup, include=FALSE}
@@ -28,6 +30,9 @@ if (!require(pacman)) install.packages("pacman")
 
 pacman::p_load(tidyverse, hubeau, FloodFreqPlot, janitor, openxlsx) # installe les packages non installés et charge tout
 
+#installation des fonctions necessaires 
+
+source("functions/1_Mise_en_forme.R")
 
 ```
 
@@ -100,8 +105,8 @@ carhyce_hdf_ofb<-carhyce_hdf_ofb %>%
    mutate(Code_sta = recode(Code_sta, "1090000" = "1000477", 
                             "1006000" = "1001131", 
                             .default = Code_sta),
-         Libelle_sta = recode(Libelle_sta, "LA SLACK Ã€ AMBLETEUSE (62)" = "LA SLACK Ã€ RINXENT (62)", 
-                              "L'HELPE MINEURE Ã€ MAROILLES (59)" = "HELPE MINEURE Ã€ GRAND FAYT (59)", 
+         Libelle_sta = recode(Libelle_sta, "LA SLACK À AMBLETEUSE (62)" = "LA SLACK À RINXENT (62)", 
+                              "L'HELPE MINEURE À MAROILLES (59)" = "HELPE MINEURE À GRAND FAYT (59)", 
                               .default = Libelle_sta)) 
 ```
 

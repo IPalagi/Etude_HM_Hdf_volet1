@@ -66,7 +66,7 @@ function_Qb_Q2 <- function(code_region, Q2_fr, hydro_carhyce){
   # calcul du rapport Qb_Q2 
   
   hydro_carhyce_vf<-hydro_carhyce_vf %>% 
-    mutate(Qb_Q2=Q2_carhyce/Q2_m3)
+    mutate(Qb_Q2= Q_plein_bord/Q2_carhyce)
   
   
   
