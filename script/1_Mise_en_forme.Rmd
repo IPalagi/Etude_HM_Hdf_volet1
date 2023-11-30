@@ -60,7 +60,7 @@ IED_joint<-IED_joint %>%
   mutate(date_realisation=as.Date(date_realisation, # changement de format 
          version_protocole=as.factor(version_protocole),
          nom_her_ou_dom_dominant=as.factor(nom_her_ou_dom_dominant))) %>% 
-  rename(Date=date_realisation, # renommer certaines colonnes (noms plus courts)
+  rename(Date=date_realisation, # renommer certaines colonnes 
          Code_sta=code_station, 
          Libelle_sta = localisation_station_de_mesure,
          Nom_HER_dom=nom_her_ou_dom_dominant,
@@ -173,13 +173,7 @@ Q2_fr<-Q2_fr %>%
   rename(Code_sta= code_de_l_entite,
          Surface_BV_hydro=surface_de_bassin_versant_hydrologique_km,
          Surface_BV_topo=surface_de_bassin_versant_topographique_km,
-         Q2_m3 = debit_m_s) %>% 
-  mutate(latitude = as.numeric(latitude), #changer de format de colonnes 
-         longitude= as.numeric(longitude), 
-         Code_sta= as.factor(Code_sta),
-         Surface_BV_hydro= as.numeric(Surface_BV_hydro),
-         Surface_BV_topo= as.numeric(Surface_BV_topo),
-         Q2_m3 = as.numeric(Q2_m3)) 
+         Q2_m3 = debit_m_s) 
 
 colnames(Q2_fr) #afficher les noms de colonnes 
 

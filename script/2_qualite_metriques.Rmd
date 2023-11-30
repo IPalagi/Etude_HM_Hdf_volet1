@@ -1,0 +1,815 @@
+---
+title: "Etude de la distribution des indicateurs hydromorphologiques sélectionnés
+  \  dans les Hauts-de-France (Etape 1 de l'étude)"
+author: "Imane PALAGI"
+date: '`r Sys.Date()`'
+output: 
+  html_document: 
+    toc: yes
+    toc_depth: 3
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning=FALSE, message=FALSE)
+```
+
+Ce document présente la méthode et les résultats du premier volet de l'étude "état des lieux de l'hydromorphologie en Hauts-de-France".
+
+Ce volet a pour but d'étudier la distribution globale à l'échelle de la région d'un certain nombre d'indicateurs hydromorphologiques susceptibles de mettre en évidence des disfonctionnement des cours d'eau de la région. Ces distributions devront permettre, via la création de classes de qualité hydromorphologique, de statuer sur l'état hydromorphologique des stations Carhyce de la région au regard des métriques étudiées. 
+
+Ces distribution concerneront les indicateurs calculés à partir des données les plus récentes de chaque station.
+
+```{r}
+#installation et/ou chargement des packages necessaires 
+
+if (!require(pacman)) install.packages("pacman") 
+
+pacman::p_load(tidyverse, openxlsx, ggpubr) # installe les packages non installés et charge tout
+```
+
+```{r}
+#création d'une palette de couleurs contrastées pour les graphiques 
+
+palette<-c('#e6194b', '#3cb44b', '#ffe119', '#4363d8', '#f58231', 
+                    '#911eb4', '#46f0f0', '#f032e6', '#bcf60c', '#fabebe', 
+                    '#008080', '#e6beff', '#9a6324', '#fffac8', '#800000', 
+                    '#aaffc3', '#808000', '#ffd8b1', '#000075', '#808080', 
+                    '#ffffff', '#000000')
+
+```
+
+# I) Identification des opérations Carhyce à étudier
+
+Il convient pour chaque station Carhyce d'identifier la dernière opération en date, c'est à dire le maximum des dates rattachées à ces stations.
+Les data frame de travail seront le data frame carhyce_hdf_ofb et hydro_carhyce_vf constitués dans le script 1_Mise_en_forme.Rmd.
+
+```{r}
+#importation des data frame de travail de base 
+
+load(file="output/1_df_carhyce_hdf.RData") 
+load(file="processed_data/1_Qb_Q2.RData")
+
+```
+
+```{r}
+#  carhyce_hdf_ofb : sélection pour chaque station de la dernière opération en date 
+
+carhyce_hdf_der_ope<-carhyce_hdf_ofb %>% 
+  dplyr:: group_by(Code_sta, Libelle_sta) %>%  #grouper par station 
+  filter(Date==max(Date)) %>%  # par station, filtrer les dates les plus récentes (date maximum)
+  mutate(version_protocole=as.factor(version_protocole), 
+         rapport_largeur_profondeur_q1 =as.numeric(rapport_largeur_profondeur_q1))
+
+carhyce_hdf_der_ope$version_protocole <- ordered(
+  carhyce_hdf_der_ope$version_protocole, 
+  levels = c("2009 (Pré-déploiement)", "2009-2016", "2017")) 
+#ordonnement du facteur Version_protocole dans l'ordre chronologique 
+
+```
+
+```{r}
+#  hydro_carhyce_vf : sélection pour chaque station de la dernière opération en date 
+
+Qb_Q2_der_ope<-hydro_carhyce_vf%>% 
+  dplyr:: group_by(code_sta_HM, libelle_sta) %>%  # grouper par station Carhyce 
+  filter(Date==max(Date)) #filtrer les dates les plus récentes (max des dates)
+
+df<-carhyce_hdf_der_ope %>% 
+  select(code_sta_HM= Code_sta, version_protocole, Nom_HER_dom) 
+#création d'un data frame provisoire contenant les informations de base des stations Carhyce 
+ 
+Qb_Q2_der_ope<-left_join(Qb_Q2_der_ope, df, by="code_sta_HM")  
+#jointure de ces informations au data frame des Qb_Q2 des dernières opérations 
+
+```
+
+```{r, eval=FALSE}
+save(carhyce_hdf_der_ope, Qb_Q2_der_ope, file="raw_data/2_df_derniere_operation.RData")
+```
+
+# II) Représentation de la distribution pour chaque indicateurs
+
+Il sera à garder à l'esprit pour l'interprétation des métriques étudiées, que certaines d'entre elles doivent être prises avec précaution.
+Ceci en particulier pour les métriques calculées à partir du débit à plein bord (puissance spécifique à plein bord et rapport Qb_Q2).
+En effet, certains débits de plein bord sont estimés grâce à la formule de Manning-Strickler à partir des résultats d'un seul passage Carhyce.
+Or, cette formule repose sur un certain nombre d'hypothèses qui ne sont souvent pas respectées dans la réalité, amenant à des débits de plein bords possiblement peu fiables lorsqu'ils sont calculés par cette méthode.
+
+## 1) Rapports largeur/profondeur de plein bord
+
+
+Cette métrique peut être déclinée de deux manière : en étudiant les valeurs brutes du rapport largeur/profondeur de plein bord, ou en étudiant les résidus aux modèles de référence du rapport largeur/profondeur de plein bord (autrement dit l'écart aux modèles de référence). Cette deuxième manière d'analyser le rapport L/P est possible car le rapport L/P de plein bord et une métrique de l'IMG (Indice Morphologique Global). Il dispose donc d'un modèle linéaire de référence construit à partir des stations de référence pour l'hydromorphologie en fonction de la surface de leur bassin versant. 
+
+```{r}
+carhyce_hdf_der_ope %>% 
+  ggplot(aes(x=version_protocole, y=rapport_largeur_profondeur_qb, fill=version_protocole))+
+  geom_boxplot()+
+  geom_jitter()+
+  stat_summary(fun.y=mean, geom="point", shape=20, size=6, color="red", fill="red") +
+  xlab("Version du protocole Carhyce")+
+  ylab("Rapport (largeur plein bord/profondeur)")+
+  scale_fill_brewer(palette="Set3")
+```
+
+```{r}
+carhyce_hdf_der_ope %>% 
+  ggplot(aes(x=Nom_HER_dom, y=rapport_largeur_profondeur_qb, fill=Nom_HER_dom))+
+  geom_boxplot()+
+  geom_jitter()+
+  stat_summary(fun.y=mean, geom="point", shape=20, size=6, color="red", fill="red") +
+  xlab("Version du protocole Carhyce")+
+  ylab("Rapport (largeur plein bord/profondeur)")+
+  scale_fill_brewer(palette="Set2")
+```
+
+Les représentations ci-dessus permettent de constater que la majorité des rapports L/P sont situés entre 5 et 10, mais elles permettent difficilement d'interpréter les résultats de cette métrique. 
+
+La représentation des distributions des écarts (standardisés) aux modèles de référence permet plus facilement d'interpréter la métrique et de statuer sur un bon état hydromorphologique des stations vis à vis du rapport L/P : 
+
+```{r}
+carhyce_hdf_der_ope %>% 
+  ggplot(aes(x=version_protocole, y=residu_standardise_modele_rapport_largeur_profondeur_qb, 
+             fill=version_protocole))+
+  geom_boxplot()+
+  #geom_jitter()+
+  stat_summary(fun.y=mean, geom="point", shape=20, size=6, color="red", fill="red") +
+  geom_text(aes(label=..count..), y=0, stat='count', colour="blue", size=4, vjust = 12.8)+
+  geom_hline(yintercept=0, color="green")+
+  xlab("Version du protocole Carhyce")+
+  ylab("Ecart à la référence pour (largeur/profondeur) de plein bord")+
+  scale_fill_brewer(palette="Set3")
+```
+
+```{r}
+carhyce_hdf_der_ope %>% 
+  ggplot(aes(x=Nom_HER_dom, y=residu_standardise_modele_rapport_largeur_profondeur_qb, 
+             fill=Nom_HER_dom))+
+  geom_boxplot()+
+  #geom_jitter()+
+  stat_summary(fun.y=mean, geom="point", shape=20, size=6, color="red", fill="red") +
+  geom_text(aes(label=..count..), y=0, stat='count', colour="blue", size=4, vjust = 12.8)+
+  geom_hline(yintercept=0, color="green")+
+  xlab("HER 1")+
+  ylab("Ecart à la référence pour (largeur/profondeur) de plein bord")+
+  scale_fill_brewer(palette="Set2")
+```
+
+On constate grâce aux deux graphiques ci-dessus que la majorité des stations présentent un écart à la référence négatif pour le rapport largeur/profondeur de plein bord.
+Cela indique à priori que les cours d'eau au niveau de ces stations sont plus étroits et profonds que la référence l'HER considéré.
+Toutefois, cet écart à la référence est peu élevé, entre 0 et 2 en valeur absolue environ : selon les informations données sur l'IED Carhyce, cet interval contient 95% des valeurs des résidus des stations de référence.
+C'est à dire qu'il existe des stations de référence qui présentent un même niveau d'écart au modèle de référence que la majorité des stations Carhyce des Hauts-de-France.
+On remarque une seule station présentant un écart à la référence suppérieur à 3.
+Uniquement 1% des stations de référence présentent un écart au modèle >= 3.
+
+## 2) Puissance spécifique de plein bord
+
+Note : il y a quelques NA pour cette métrique.
+
+Pour faciliter l'interprétation des distributions de la puissance spécifique de plein bord, 5 classes de puissances sont construites en se basant sur la littérature.
+
+Elles correspondent à :
+
+- Classe 1 : \<15 W/m2, cours d'eau de faible puissance, généralement inactifs 
+- Classe 2 : entre 15 et 35 W/m2, cours d'eau de puissance faible à moyenne généralement insuffisante pour que le cours d'eau s'ajuste aux contraintes extérieures
+- Classe 3 : entre 35 et 100 W/m2, cours d'eau de puissance moyenne à forte, suffisantes pour un ajustement du cours d'eau aux contraintes
+- Classe 4 : entre 100 et 200 W/m2, cours d'eau de forte à très forte puissance, à forte dynamique d'ajustement aux contraintes
+- Classe 5 : \> 200 W/m2, cours d'eau de très forte puissance, transportant une charge caillouteuse grossière
+
+```{r}
+
+# construction d'une colonne de classe de puissance 
+
+carhyce_hdf_der_ope<-carhyce_hdf_der_ope %>% 
+  mutate(classe_puissance= case_when (
+    puissance_specifique_qb_w_m2 <= 15 ~ "1",
+    
+    puissance_specifique_qb_w_m2 > 15 & 
+      puissance_specifique_qb_w_m2 <= 35 ~ "2",
+    
+    puissance_specifique_qb_w_m2 > 35 &
+      puissance_specifique_qb_w_m2 <= 100 ~ "3",
+    
+    puissance_specifique_qb_w_m2 > 100 &
+      puissance_specifique_qb_w_m2 <= 200 ~ "4",
+    
+    puissance_specifique_qb_w_m2 > 200 ~ "5"
+  ))
+```
+
+```{r}
+ggplot(data=carhyce_hdf_der_ope, aes(x=version_protocole, y=puissance_specifique_qb_w_m2, 
+                                       fill=version_protocole))+
+  geom_boxplot(outlier.shape = NA)+
+  geom_jitter(aes(color=classe_puissance))+
+  stat_summary(data=carhyce_hdf_der_ope, fun.y=mean, geom="point", shape=20, size=6, 
+               color="red4", fill="red4") +
+    geom_text(aes(label=..count..), y=0, stat='count', colour="blue", size=4, vjust = -29 )+
+  xlab("Version du protocole Carhyce")+
+  ylab("Puissance spécfique moyenne à plein bord (en W/m2)")+
+  scale_fill_brewer(palette="Set3")+
+  scale_color_manual(values=palette)
+```
+
+On constate que la grande majorité des cours d'eau de la région (étudiés dans le cadre du protocole Carhyce) sont de faible puissance, entre 0 et 35 W/m2.
+Le minimum étant :
+
+```{r}
+
+min(carhyce_hdf_der_ope$puissance_specifique_qb_w_m2, na.rm=T)
+```
+
+le maximum étant :
+
+```{r}
+
+max(carhyce_hdf_der_ope$puissance_specifique_qb_w_m2, na.rm=T)
+```
+
+et la médiane étant :
+
+```{r}
+median(carhyce_hdf_der_ope$puissance_specifique_qb_w_m2, na.rm=T)
+```
+
+La valeur maximum (puissance spécifique de la dernière opération pour le Gland à Saint-Michèle) parait aberrante aux vues du comportement du cours d'eau (observations des agents de terrain, spécifiquement lors des pêches et des Carhyce) et des faibles pentes de cours d'eau dans la région. 
+
+```{r}
+ggplot(data=carhyce_hdf_der_ope, aes(x=Nom_HER_dom, y=puissance_specifique_qb_w_m2, 
+                                       fill=Nom_HER_dom))+
+  geom_boxplot(outlier.shape = NA)+
+  geom_jitter(aes(color=classe_puissance))+
+  stat_summary(data=carhyce_hdf_der_ope, fun.y=mean, geom="point", shape=20, size=6, 
+               color="red4", fill="red4") +
+    geom_text(aes(label=..count..), y=0, stat='count', colour="blue", size=4, vjust = -29 )+
+  xlab("Version du protocole Carhyce")+
+  ylab("Puissance spécfique moyenne à plein bord (en W/m2)")+
+  scale_fill_brewer(palette="Set2")+
+  scale_color_manual(values=palette)
+```
+
+## 3) Rapport débit de plein bord et débit de crue biennale
+
+Pour faciliter l'interprétation, une ligne correspondant à y=1 sera tracée sur toutes les distributions. Elle correspond à la situation idéale où le débit de plein bord est égal au débit de crue biennale (bon dimentionnement du cours d'eau). 
+
+Il sera à garder à l'esprit que le calcul de cette métrique comporte des incertitudes notables, à la fois vis à vis du calcul du débit de plein bord et du débit de crue biennale (incertitudes lié au calcul du Q2 à l'endroit de la station jaugée + incertitudes liée aux approximations faites lors de l'application de la formule de Myer). 
+
+```{r}
+Qb_Q2_der_ope %>% 
+  ggplot(aes(x=version_protocole, y=Qb_Q2, fill=version_protocole))+
+  geom_boxplot()+
+  geom_jitter()+
+  stat_summary(fun.y=mean, geom="point", shape=20, size=6, color="red4", fill="red4") +
+    geom_text(aes(label=..count..), y=0, stat='count', colour="blue", size=4)+
+   geom_hline(aes(yintercept=1), color="green3", size=1)+
+  xlab("Version du protocole Carhyce")+
+  ylab("Rapport Qb/Q2 à l'endroit de la station Carhyce")+
+  scale_fill_brewer(palette="Set3")
+
+```
+
+On constate que pour les dernières opérations, le rapport Qb_Q2 semble être > 1, en particulier pour le protocole de 2017. 
+
+Les Qb_Q2 des opérations réalisées selon le protocole 2009-2016 sont peu dispersés et sont en majorité proches de 1.
+
+```{r}
+Qb_Q2_der_ope %>% 
+  ggplot(aes(x=Nom_HER_dom, y=Qb_Q2, fill=Nom_HER_dom))+
+  geom_boxplot()+
+  geom_jitter()+
+  
+  geom_text(aes(label=..count..), y=0, stat='count', colour="blue", size=4)+
+  xlab("HER de niveau 1")+
+  geom_hline(aes(yintercept=1), color="green3", size=1)+
+  stat_summary(fun.y=mean, geom="point", shape=20, size=6, color="red4", fill="red4") +
+  ylab("Rapport Qb/Q2 à l'endroit de la station Carhyce")+
+  scale_fill_brewer(palette="Set2")
+```
+
+Les mêmes observations peuvent être faites pour les distributions selon les HER 1. La majorité des valeurs sont > 1. Ceci indique que le débit de plein bord est suppérieur au débit de crue biennale (crue morphogène), donc que la probabilité que le cours d'eau subisse une crue morphogène est moindre car le cours d'eau est profond. 
+
+Ceci indique à priori une faible capacité des cours d'eau à évoluer.
+
+## 4) Score ripisylve
+
+Le score ripisylve représente la couverture par la végétation des berges du cours d'eau : plus il est élevé, plus la végétation est épaisse, haute et continue (longitudinalement).
+On partira du principe, en accord avec les travaux hydrmorphologiques de la Direction Générale de l'OFB et du CNR (laboratoire de géographie physique), que plus la ripisylve est épaisse, haute et continue, plus son état peut être considéré comme bon. Ceci est relatif à une définition de l'hydromorphologie comme ensemble de processus physiques et non pas comme support de la biodiversité aquatique.
+
+Il est à noter que le score ripisylve contient des données manquantes (18 stations sans score ripisylve pour leur dernière opération). Ceci est dû à la méthode de calcul du score ripisylve qui sera normalement revue pour éviter les données manquantes. 
+
+```{r}
+carhyce_hdf_der_ope %>% 
+ # filter(Version_protocole %in% c("2009-2016", "2017")) %>% 
+  ggplot(aes(x=version_protocole, y=score_ripisylve, fill=version_protocole))+
+  geom_boxplot()+
+  geom_jitter()+
+  stat_summary(fun.y=mean, geom="point", shape=20, size=6, color="red", fill="red") +
+  geom_text(aes(label=..count..), y=0, stat='count', colour="blue", size=4)+
+  xlab("Version du protocole Carhyce")+
+  ylab("Score ripisylve")+
+  scale_fill_brewer(palette="Set3")
+```
+
+```{r}
+carhyce_hdf_der_ope %>% 
+  ggplot(aes(x=Nom_HER_dom, y=score_ripisylve, fill=Nom_HER_dom))+
+  geom_boxplot()+
+  geom_jitter()+
+  stat_summary(fun.y=mean, geom="point", shape=20, size=6, color="red", fill="red") +
+  geom_text(aes(label=..count..), y=0, stat='count', colour="blue", size=4)+
+  xlab("HER 1")+
+  ylab("Score ripisylve")+
+  scale_fill_brewer(palette="Set2")
+```
+
+On constate que les stations présentent des score ripisylve très diversifiés.
+Les distributions sont étendues et les points dispersés.
+Il n'apparait aucune tendence particulière pour la ripisylve à l'échelle des Hauts-de-France. 
+
+## 5) % sédiments fins 
+
+Le % de fines est le pourcentage de sédiments inférieurs à 2mm dans le lit mineur du cours d'eau. 
+
+L'augmentation du %fins peut avoir un impact négatif sur le cours d'eau, autant au niveau de sa biodiversité (habitats peu propices à certaines espèces de poissons ou de macro-invertébrés par exemple), que de la qualité de l'eau (transport dans les sédiments fins de polluants) ou encore du succet des opérations de restauration hydromorphologique (exemple de source : Brettschneider et. al, 2023).
+
+```{r}
+carhyce_hdf_der_ope %>% 
+  ggplot(aes(x=version_protocole, y=x_fines, fill=version_protocole))+
+  geom_boxplot()+
+  geom_jitter()+
+  stat_summary(fun.y=mean, geom="point", shape=20, size=6, color="red", fill="red") +
+  geom_text(aes(label=..count..), y=0, stat='count', colour="blue", size=4)+
+  xlab("Version du protocole Carhyce")+
+  ylab("% sédiments fins")+
+  scale_fill_brewer(palette="Set3")
+```
+
+```{r}
+
+carhyce_hdf_der_ope %>% 
+  ggplot(aes(x=Nom_HER_dom, y=x_fines, fill=Nom_HER_dom))+
+  geom_boxplot()+
+  geom_jitter()+
+  ylim(0,100)+
+  stat_summary(fun.y=mean, geom="point", shape=20, size=6, color="red", fill="red") +
+  geom_text(aes(label=..count..), y=0, stat='count', colour="blue", size=4)+
+  xlab("HER 1")+
+  ylab("% sédiments fins")+
+  scale_fill_brewer(palette="Set2")
+
+```
+
+On constate que les % de sédiments fins prennent des valeurs très variées et réparties de façon quasi homogène entre 0 et 100% : les médiane et moyenne de la distribution des tables calciares (l'essentiel de la région) se situent aux alentours de 40-50%. Certaines stations présentent des %fines très élevés, y compris de 100% (uniquement des sédiments fins dans le lit mineur du cours d'eau). 
+
+## 6) Coefficient de sinuosité
+
+Le coefficient de sinuosité, calculé autour des stations Carhyce, peut rendre compte du degré d'artificialisation des cours d'eau (rectification par exemple).
+Il est décrit dans le rapport IED Carhyce de 2017 (Tamisier et. al) comme un potentiel indcateur pertinent du degrés d'altération des cours d'eau.
+Plus le coefficient augmente, plus le cours d'eau est sinueux.
+
+Dans les Hauts-de-France, où beaucoup de cours d'eau sont canalisés/artificalisés, on s'attend donc à avoir des coefficients faibles.
+
+Le rapport IED Carhyce de 2017 propose des classes de sinuosité :
+
+-   Faible : 1 à 1,05
+-   Moyenne : 1,05 à 1,25
+-   Forte : 1,25 à 1,50
+-   Très forte : 1,50 à 2,50
+
+1 opération ne dispose pas de coefficient de sinuosité.
+
+```{r}
+# Construction d'une colonne classe_sinuo : 
+
+carhyce_hdf_der_ope<-carhyce_hdf_der_ope %>% 
+  mutate(classe_sinuo = case_when(
+    coefficient_de_sinuosite >=1 & coefficient_de_sinuosite < 1.05  ~ "Faible",
+    coefficient_de_sinuosite >=1.05 & coefficient_de_sinuosite < 1.25  ~ "Moyenne",
+    coefficient_de_sinuosite >=1.25 & coefficient_de_sinuosite < 1.50  ~ "Forte",
+    coefficient_de_sinuosite >=1.50 & coefficient_de_sinuosite < 2.50  ~ "Très forte"
+    ))
+
+carhyce_hdf_der_ope$classe_sinuo <- ordered(carhyce_hdf_der_ope$classe_sinuo, 
+                                            levels = c("Faible", "Moyenne", "Forte", "Très forte"))
+
+```
+
+```{r}
+ carhyce_hdf_der_ope %>% 
+  ggplot(aes(x=version_protocole, y=coefficient_de_sinuosite, fill=version_protocole))+
+  geom_boxplot(outlier.shape = NA)+
+  geom_jitter(aes(color=classe_sinuo))+
+  stat_summary(fun.y=mean, geom="point", shape=20, size=6, color="red4", fill="red4") +
+   geom_text(aes(label=..count..), y=0, stat='count', colour="blue", size=4, vjust = -68 )+
+  xlab("Version du protocole Carhyce")+
+  ylab("Coefficient de sinuosité")+
+  scale_fill_brewer(palette="Set3")+
+  scale_color_manual(values = c("Faible" = '#e6194b', 
+                                "Moyenne"= 'yellow3', 
+                                "Forte" ='#46f0f0',  
+                                "Très forte"='green3'))
+```
+
+On constate que la majorité des stations présentent une sinuosité moyenne, avec les médianes et les moyennes des distributions quasiment toutes situées dans cette classe de sinuosité.
+
+# III) Construction d'un data frame de synthèse des médianes et moyennes
+
+Le but de cette partie est d'aboutir à un data frame résumant pour l'ensemble de la région Hdf les médianes et moyennes des dernières opérations Carhyce pour chaque indicateur représenté en partie II. Les médianes et moyennes seront celles calculées pour l'ensemble des stations étudiées, sans distinction d'HER ou de vesrion de protocole. 
+
+```{r}
+synthese_distri_met <- data.frame(
+  Parametre = c("Médiane", "Moyenne"),
+  L_Profondeur_Q1 = c(
+    median(carhyce_hdf_der_ope$rapport_largeur_profondeur_q1, na.rm = T),
+    mean(carhyce_hdf_der_ope$rapport_largeur_profondeur_q1, na.rm =
+           T)
+  ),
+  L_Profondeur_Qb = c(
+    median(carhyce_hdf_der_ope$rapport_largeur_profondeur_qb, na.rm = T),
+    mean(carhyce_hdf_der_ope$rapport_largeur_profondeur_qb, na.rm =
+           T)
+  ),
+  Puissance_spe_Qb = c(
+    median(carhyce_hdf_der_ope$puissance_specifique_qb_w_m2, na.rm = T),
+    mean(carhyce_hdf_der_ope$puissance_specifique_qb_w_m2, na.rm =
+           T)
+  ),
+  Score_ripisylve = c(
+    median(carhyce_hdf_der_ope$score_ripisylve, na.rm = T),
+    mean(carhyce_hdf_der_ope$score_ripisylve, na.rm =
+           T)
+  ),
+  x_fines = c(
+    median(carhyce_hdf_der_ope$x_fines, na.rm = T),
+    mean(carhyce_hdf_der_ope$x_fines, na.rm =
+           T)
+  ),
+  Coef_sinuosite = c(
+    median(carhyce_hdf_der_ope$coefficient_de_sinuosite, na.rm = T),
+    mean(carhyce_hdf_der_ope$coefficient_de_sinuosite, na.rm =
+           T)
+  ),
+  Qb_Q2 = c(
+    median(Qb_Q2_der_ope$Qb_Q2, na.rm=T),
+    mean(Qb_Q2_der_ope$Qb_Q2, na.rm = T)
+  )
+)
+ synthese_distri_met 
+```
+
+```{r}
+save(synthese_distri_met, file="processed_data/2_synthese_metriques_choisies_der_ope.RData")
+
+```
+
+# IV) Construction des classes de qualité pour chaque métrique
+
+Après avoir observé la distribution des métriques étudiées pour les dernières opérations de chaque station en fonction des HER et des version de protocole (éventuellement selon des classes de métriques aidant linterprétation), il est necessaire pour statuer sur un "état hydromorphologique global" dans les Hdf de définir des classes de qualité hydromorphologique (bon, mauvais etc.).
+
+Avant de décrire ces classes de qualité, il convient de rappeler que bien qu'elles s'appuyent sur la littérature ou des stations de références, elles ne peuvent prendre en compte de façon exhaustive toutes les situations existantes.
+Elles intègrent de plus necessairement une part de subjectivité.
+Elles sont donc à prendre à titre indicatif.
+
+Deux méthodes ont été utilisées pour construire les classes de qualité :
+
+-   Une comparaison aux modèles de références pour chaque HER pour le rapport largeur/profondeur de plein bord, qui est une métrique de l'IMG
+-   La recherche dans la littérature de seuils de qualité relatifs soit à une capacité du cours d'eau à s'adapter aux contraintes soit à la qualité de l'habitat pour la biodiversité aquatique 
+
+```{r}
+# selection dans le data frame carhyce_ofb_der_ope des métriques utilisées pour 
+#les classes de qualité : 
+
+carhyce_hdf_der_ope2<-carhyce_hdf_der_ope %>% 
+  select(Code_sta,
+         Libelle_sta, 
+         rapport_largeur_profondeur_qb,
+         residu_standardise_modele_rapport_largeur_profondeur_qb,
+         puissance_specifique_qb_w_m2,
+         score_ripisylve,
+         x_fines,
+         coefficient_de_sinuosite, 
+         Nom_HER_dom, 
+         Date, 
+         version_protocole)
+
+# ajout de la colonne Qb_Q2 dans le même data frame : 
+
+df<-Qb_Q2_der_ope %>% 
+  select(Code_sta=code_sta_HM, Qb_Q2)
+
+carhyce_hdf_der_ope2<-left_join(carhyce_hdf_der_ope2, df, by="Code_sta")
+
+```
+
+## 1) Largeur/profondeur de plein bord
+
+Pour cette métrique, les modèles de références par HER ont été utilisés.
+Par conséquent, la véritable métrique étudiée est l'écart au modèle pour le rapport largeur/profondeur de plein bord, qui sont les valeurs de résidus standardisés.
+Il est considéré que plus l'écart est grand, moins l'état du cours d'eau est bon.
+Sur l'IED Carhyce, il est indiqué que 68% des valeurs des résidus des stations de référence sont situées dans l'intervalle [0;1], 95% dans l'intervalle [0;2] et 99% dans l'intervalle [0;3] (en valeurs absolues).
+Ces à partir des ces intervalle que la classe de qualité est construite, en considerant que :
+
+-   Des résidus entre 0 et 1 (en valeur absolue) témoignent d'un bon état de la métrique largeur/profondeur
+-   Des résidus entre 1 et 3 témoignent d'un état moyen
+-   Des résidus \>3 témoignent d'un mauvais état
+
+```{r}
+# création d'une colonne de classe largeur/profondeur 
+
+carhyce_hdf_der_ope2 <- carhyce_hdf_der_ope2 %>%
+  mutate(qualite_LP_Qb =
+    case_when(
+      residu_standardise_modele_rapport_largeur_profondeur_qb <= 1  ~ "Bon",
+      residu_standardise_modele_rapport_largeur_profondeur_qb > 1 &
+        residu_standardise_modele_rapport_largeur_profondeur_qb <= 3 ~ "Moyen",
+      residu_standardise_modele_rapport_largeur_profondeur_qb > 3 ~ "Mauvais",
+    )) %>% 
+  mutate(qualite_LP_Qb=as.factor(qualite_LP_Qb))
+
+carhyce_hdf_der_ope2$qualite_LP_Qb<-ordered(
+  carhyce_hdf_der_ope2$qualite_LP_Qb, levels = c("Bon", 
+                                                      "Moyen", 
+                                                      "Mauvais"))
+```
+
+Grâce à la distribution représentée en partie II), on peut déjà deviner que la très grande majorité des stations présentent un bon état de la métrique largeur/profondeur de plein bord.
+Cette supposition se confirme :
+
+```{r}
+carhyce_hdf_der_ope2 %>% 
+  ggplot(aes(x=qualite_LP_Qb, fill= qualite_LP_Qb))+
+  geom_histogram(stat="count")+
+  xlab("Classe de qualité de la métrique largeur/profondeur plein bord")+
+  ylab("Nombre de stations Carhyce (dernières opérations)")+
+  scale_fill_manual(values=c('Bon'="green3", 
+                             'Moyen'="yellow3",
+                             'Mauvais'="red3"))+
+  labs(fill = "Qualité de 
+largeur/profondeur Qb")+
+  theme(legend.title=element_text(size=9))
+
+```
+
+La classe de qualité globale pour les Hdf pour la métrique largeur/profondeur plein bord est donc "**Bon**". 
+
+On s'attendait avant l'étude à observer des rapports largeur/profondeur de plein bord écartés des références, démontrant des recalibrages de cours d'eau nombreux (se traduisant par exemple par des surcreusements). Les classes de qualité ci-dessus, basée sur la comparaison au modèle de référence pour la métrique largeur/profondeur de plein bord, ne permettent pas de visualiser de telles altérations au niveau globale dans les Hauts-de-France. La seule station dont la métrique s'écartent fortement de la référence (mauvais état) est : 
+
+```{r}
+carhyce_hdf_der_ope2 %>% 
+  filter(qualite_LP_Qb=="Mauvais") %>% 
+  select(Code_sta, Libelle_sta, 
+         residu_standardise_modele_rapport_largeur_profondeur_qb ,
+         Nom_HER_dom)
+```
+Elle présente un rapport L/P fortement plus élevé que le modèle de référence, indiquant une largeur de plein bord fortement plus élevée que pour le modèle de référence et/ou une profondeur de plein bord fortement plus faible.
+
+Ces résultats paraissent étonnant en comparaison avec le dire d'expert (connaissance des cours d'eau par les agents de l'OFB), qui tendrait plutôt à statuer sur un mauvais état, ou à minima un état moyen des la métrique largeur/profondeur de plein bord (cours d'eau incisés). Il a été constaté dans d'autres régions que le bon état de la géométrie hydraulique de certains cours d'eau incisé était surestimé par les modèles de référece, en particulier pour les cours d'eau de plaine et pour l'HER Tables calcaires. Les modèles de références pourraient donc être à l'origine de résultats peu représentatifs de la réalité de la géométrie hydraulique des cours d'eau des Tables calcaires, ce qui expliquerait le bon état étonnant de cours d'eau des Hauts-de-France pour la métrique largeur/profondeur. 
+
+## 2) Puissance spécifique de plein bord 
+
+Les classes de qualité sont déterminées à partir de la littérature (dont les classes de puissances définies en partie II)2)), en considérant qu'un cours d'eau en bon état est un cours d'eau ayant une puissance spécifique de plein bord lui permettant d'ajuster sa morphologie. Le seuil de bon état serait donc ici une puissance spécifique de 35W/m^2. Comme dans la littérature, on peut considérer qu'un ajustement est possible environ à partir de 20-25 W/m2 selon les cours d'eau, on considère donc que : 
+
+- une puissance > 35 W/m^2 revèle un état qui sera considéré comme "Bon" (classes de puissance 3,4 et 5)
+- une puissance comprise en 20 et 35 W/m2 revèle un état qui sera considéré comme "Moyen" (classes de puissance 2)
+- une puissance <20 W/m2 révèle un état qui sera considéré comme "Mauvais" (classe 1 et partie de la classe 2)
+
+Ces classes sont à nuancer, car la capacité d'un cours d'eau à s'ajuster ne dépend pas uniquement de sa puissance spécifique de plein bord, mais également de l'érodabilité de ses berges et des apports solides venant de l'amont. 
+
+```{r}
+carhyce_hdf_der_ope2 <- carhyce_hdf_der_ope2 %>%
+  mutate(qualite_puissance =
+    case_when(
+      puissance_specifique_qb_w_m2 <20  ~ "Mauvais",
+      puissance_specifique_qb_w_m2 >= 20 & puissance_specifique_qb_w_m2 < 35 ~ "Moyen",
+      puissance_specifique_qb_w_m2 >=35  ~ "Bon"
+    )) %>% 
+  mutate(qualite_puissance=as.factor(qualite_puissance))
+
+carhyce_hdf_der_ope2$qualite_puissance<-
+  ordered(carhyce_hdf_der_ope2$qualite_puissance, levels = c("Bon", 
+                                                             "Moyen", 
+                                                             "Mauvais")) 
+
+```
+
+
+```{r}
+carhyce_hdf_der_ope2 %>% 
+  ggplot(aes(x=qualite_puissance, fill= qualite_puissance))+
+  geom_histogram(stat="count")+
+  xlab("Classe de qualité de la puissance spécifique de plein bord")+
+  ylab("Nombre de stations Carhyce (dernières opérations)")+
+  scale_fill_manual(values=c('Bon'="green3",
+                             'Moyen'="yellow3",
+                             'Mauvais'="red3"))+
+  labs(fill = "Qualité de 
+Puissance spécifique Qb")+
+  theme(legend.title=element_text(size=9))
+```
+
+La grande majorité des stations sont en "mauvais" état pour la puissance. 
+
+La classe de qualité globale au niveau des Hdf pour la puissance spécifique de plein bord est donc "**Mauvais**". 
+
+Il semblerait donc, comme attendu, qu'au globale les cours d'eau de Hauts-de-France puissent être caractéirsés de peu voire très peu puissants, et par conséquent peu réactifs du point de vue de leur morphologie. Il existe donc potentiellement un risque vis à vis des altérations d'origines anthropiques sur ces cours d'eau, qui auraient à priori du mal à s'ajuster aux contraintes extérieurs. 
+
+## 3) Rapport Qb_Q2
+
+Comme expliqué en partie II)3), si la rapport Qb_Q2 est inférieur à 1, sela signifie que le débit de plein bord est inférieur à la valeur de la crue morphogène, s'il est suppérieur à 1 c'est que le débit de plein bord est suppérieur au débit de crue morphogène. 
+
+Compte tenu de la faible précision du calcul du rapport Qb_Q2 (approximation lors de l'application de la formule de Myer), les Qb_Q2 seront arrondis au 10e. 
+
+Les classes de qualité suivantes sont construites : 
+
+- un rapport environ = 1 traduit une bonne qualité de la métrique Qb_Q2 (métrique comprise entre 0,8 et 1,2)
+- un rapport différent de 1 (<0,8 et >1,2) traduit une mauvaise qualité de la métrique 
+
+Le choix de l'intervelle 0,8 ; 1,2 pour la bonne qualité (environ 1) est subjectif : il n'est pas possible de s'appuyer sur la littérature ou le dire d'expert pour définir cet intervalle. Mais la définition d'un bon état correpsondant à un rapport strictement égal à 1 parrait trop strict au regard des incertitudes dans les calculs de la métriques. De plus, il est interessant dans certains cas (lors de restauration de cours d'eau par exemple) que le débit de plein bord soit légèrement inférieur au débit de crue biennale (rapport Qb_Q2 légèrement inférieur à 1). 
+ 
+Comme rappelé en partie II, du fait des estimation des débits de plein bord et des débits de crue biennale, la valeur Qb_Q2 comporte des incertitudes. 
+
+```{r}
+carhyce_hdf_der_ope2 <- carhyce_hdf_der_ope2 %>%
+  mutate(qualite_Qb_Q2 =
+    case_when(
+      round(Qb_Q2, 1) >= 0.8 & round(Qb_Q2, 1) <=1.2  ~ "Bon",
+      round(Qb_Q2, 1) < 0.8 ~ "Mauvais <1",
+      round(Qb_Q2, 1) > 1.2 ~ "Mauvais >1"
+    )) %>% 
+  mutate(qualite_Qb_Q2=as.factor(qualite_Qb_Q2))
+
+carhyce_hdf_der_ope2$qualite_Qb_Q2<-
+  ordered(carhyce_hdf_der_ope2$qualite_Qb_Q2, levels = c("Bon", "Mauvais <1", "Mauvais >1")) 
+```
+
+```{r}
+carhyce_hdf_der_ope2 %>% 
+  ggplot(aes(x=qualite_Qb_Q2, fill= qualite_Qb_Q2))+
+  geom_histogram(stat="count")+
+  xlab("Classe de qualité du rapport Qb_Q2")+
+  ylab("Nombre de stations Carhyce (dernières opérations)")+
+  scale_fill_manual(values=c('Bon'="green3",
+                             'Mauvais <1'="red",
+                             'Mauvais >1'="red4"))+
+  labs(fill = "Qualité de 
+Qb_Q2")+
+  theme(legend.title=element_text(size=9))
+```
+
+Les rapport Qb_Q2 des dernières opérations se situent de façon nette dans la catégorie Mauvais. La médiane de la distribution est égale à :  
+
+```{r}
+synthese_distri_met$Qb_Q2[1]
+```
+et la moyenne à :
+
+```{r}
+synthese_distri_met$Qb_Q2[2]
+```
+
+On peut statuer sur un état global **"Mauvais"** de la métrique Qb_Q2.
+
+Il existe plus de station ayant un Qb_Q2 "Mauvais >1", qui est la situation la moins favorable. En effet, elle traduit une profondeur du cours d'eau telle que la probabilité de crue morphogène est diminuée, rendant les cours d'eau peu ajustables aux contraintes extérieurs. De plus, elle traduit par conséquent des cours d'eau surcalibrés (surcreusement). Ceci va à l'encontre des résultats tirés de la métrique largeur/profondeur, et permet d'appuyer l'hypothèse selon laquelle les modèles de références pour la géométrie hydraulique surestiment le bon état des cours d'eau. 
+
+## 4) Score ripisylve 
+
+Comme expliqué en partie II)4), plus le score ripisylve est élevé, plus il est considéré que l'état de la ripisylve est bon. 
+Sur l'IED Carhyce, est la correspondance entre Score ripisylve et ancienne classification de type de ripisylve. En se basant sur les valeurs globales de cette correspondance (médiane des distribution d'IMG en fonction des types de ripisyvles), les classes de qualité suivantes sont construites : 
+
+- un score ripisylve entre 0 et 0,3 traduit une ripisylve considérée comme de mauvaise qualité 
+- un score ripisylve entre 0,3 et 0,6 traduit un état considéré comme Moyen 
+- un socre ripisylve > 0,6 traduit un bon état de la ripisylve 
+
+```{r}
+carhyce_hdf_der_ope2 <- carhyce_hdf_der_ope2 %>%
+  mutate(qualite_ripisylve =
+    case_when(
+      score_ripisylve <= 0.3  ~ "Mauvais",
+      score_ripisylve >0.3 & score_ripisylve<= 0.6  ~ "Moyen",
+      score_ripisylve > 0.6 ~ "Bon"
+    )) %>% 
+  mutate(qualite_ripisylve=as.factor(qualite_ripisylve ))
+
+carhyce_hdf_der_ope2$qualite_ripisylve<-
+  ordered(carhyce_hdf_der_ope2$qualite_ripisylve, levels = c("Bon", 
+                                                             "Moyen", 
+                                                             "Mauvais")) 
+
+```
+
+
+```{r}
+carhyce_hdf_der_ope2 %>% 
+  ggplot(aes(x=qualite_ripisylve, fill= qualite_ripisylve))+
+  geom_histogram(stat="count")+
+  xlab("Classe de qualité du score ripisylve")+
+  ylab("Nombre de stations Carhyce (dernières opérations)")+
+  scale_fill_manual(values=c('Bon'="green3", 
+                             'Moyen'="yellow3",
+                             'Mauvais'="red3"))+
+  labs(fill = "Qualité du 
+score ripisylve")+
+  theme(legend.title=element_text(size=9))
+```
+
+Pour cette métrique, les résultats sont beaucoup plus contrastés, partégés majoritairement entre le bon et le moyen, avec également un nombre non négligeable de stations ne disposant pas de score ripisylve. 
+La classe de qualité représentée par le plus de stations est la classe "Moyen". De plus, la médiane de la distribution, qui est égale à :
+
+```{r}
+synthese_distri_met$Score_ripisylve[1]
+```
+
+est située dans la catégorie "Moyen". 
+
+On peut donc statuer sur une qualité globale **moyenne** de la ripisyle à l'échelle des Hauts-de-France. Toutefois, il est à garder à l'esprit que la distribution des scores ripisylves est très étendue. Il ne semble pas exister de tendance générale sur toute la région. Il paraît ainsi compliqué de tirer une inteprrtation à l'échelle régionale de la distribution des score ripisylves. 
+
+Il est également à garder à l'esprit que ces classes de qualité ne tiennent pas compte de la biodiversité aquatique. Or, une ripisylve trop fournie peu par exemple empêcher la lumière d'arriver jusqu'aux macrophytes. 
+
+## 5) % fines 
+
+Dans la littérature, on trouve quelques valeurs seuils de %fines, intégrant deux aspects : le colmatage (sans lien necessaire avec la biodiversité aquatique) et les bonnes conditions d'habitats pour la biodiversité aquatique. 
+
+Ainsi, Pander et.al ont estimé qu'un pourcentage de 18% de fines constituait la limite haute d'un habitat de bonne qualité pour la biodiversité aquatique. On retrouve dans d'autres études des limites hautes pour des espèces précises en particulier de poissons et de macro-invertébrés.Un seuil suppérieur de 15% de fines et souvent mentionné pour les espèces de salmonidés. Une étude canadienne donne un seuil haut d'excellente qualité à 10%, de bonne qualité de 10 à 25% et de mauvaise qualité au dessus de 35% pour la truite brune et le saumon atlantique. Ces mêmes seuils étaient à 15%, 15 à 35% et 45% pour l'Omble de fontaine. 
+
+Concernant le colmatage du substrat du lit, qui est un risque à la fois pour la biodiversité aquatique benthique et pour le fonctionnement du cours d'eau (réduction des échanges d'eau avec les nappes souterraines par exemple), on peut trouver différents seuils relatifs à la porosité du substrat du lit en fonction de certains % de fines. Dans sa thèse (Université de Lyon), Descloux a montré qu'au delà de 30% de fines, la porosité du substrat est nulle ou quasi-nulle. Ce seuil a également été montré par Maridet et Philipe sur 6 cours d'eau Français. Descloux a montré qu'au delà de 20%, la conductivité hydraulique était très faible voire nulle. Cependant des seuils différents ont peu être trouvés dans la littérature concernant le lien entre %fines et conductivité hydraulique. De façon générale, il apparait que le colmatage peut survenir à des %fines très variés selon les cours d'eau, y compris en dessous de 15% de fines. 
+Il est à garder à l'esprit que la relation entre %fines et porosité/conductivité hydraulique n'est pas linéaire. 
+
+L'élaboration de seuils de qualité pour le %fines est donc une tâche complexe car le phénomène de colmatage et ses impacts sur la biodiversité aquatiques peuvent être très variés selon le cours d'eau et les espèces considérées. Aux vues des résultats trouvés dans la littérature, les seuils de qualité proposés (qui tentent de résumer globalement les différents seuils trouvés dans la littérature) sont : 
+
+- <= 15% de fines : qualité bonne 
+- Entre 15 et 30% : qualité moyenne 
+- > 30% : qualité mauvaise 
+
+
+
+```{r}
+
+carhyce_hdf_der_ope2 <- carhyce_hdf_der_ope2 %>%
+  mutate(qualite_fines =
+    case_when(
+      x_fines <= 15  ~ "Bon",
+      x_fines >15 & x_fines<= 30  ~ "Moyen",
+      x_fines> 30 ~ "Mauvais"
+    )) %>% 
+  mutate(qualite_fines=as.factor(qualite_fines ))
+
+carhyce_hdf_der_ope2$qualite_fines<-
+  ordered(carhyce_hdf_der_ope2$qualite_fines, levels = c("Bon", 
+                                                         "Moyen", 
+                                                         "Mauvais"))
+
+```
+
+```{r}
+carhyce_hdf_der_ope2 %>% 
+  ggplot(aes(x=qualite_fines, fill= qualite_fines))+
+  geom_histogram(stat="count")+
+  xlab("Classe de qualité de %fines")+
+  ylab("Nombre de stations Carhyce (dernières opérations)")+
+  scale_fill_manual(values=c('Bon'="green3", 
+                             'Moyen'="yellow3",
+                             'Mauvais'="red3"))+
+  labs(fill = "Qualité de
+% fines")+
+  theme(legend.title=element_text(size=9))
+```
+
+Comme il était possible de le présentir grâce aux distributions présentées en partie II)5), la majorité des stations carhyce présentent sur leur dernière opération un fort pourcentage de sédiments fins, > à 30%, qui les classent dans la catégorie "**Mauvais**" de la qualité relative au %fines. 
+
+Il semblerait donc, selon ces classes de qualité, qu'une majorité de stations Crahyce dans les Hauts-de-France soient situées sur des cours d'eau au lit de faible qualité pour la biodiversité aquatique benthique et puisse être soumises à des risques de colmatages. Il convient une fois de plus de rappeler que ces seuils de qualité ne sont pas absolus et que de nombreux facteurs peuvent influencer le qualité de l'habitat benthique ou le colmatage du lit. D'ailleurs, la distribution des %fines des stations de références par HER (Partie II 5)) semble proche de celle des stations de Hauts-de-France. Des stations considérées comme peu influencées par les activités humaines peuvent donc aussi présenter des %fines élevés. Ceci peut amener à discuter plus avant les classes de qualité décrites ci-dessus. 
+
+## 6) Coefficient de sinuosité
+
+On partira du principe que plus un cours d'eau sinue meilleure est son état regardant cette métrique. Les classes de qualité sont construites à partir des classes de sinuosité décrites dans le rapport IED Carhyce de 2017 (cf partie II)6)). Il est indiqué qu'un coefficient de sinuosité peut décrie une sinuosité forte au delà de 1,25. Par conséquent, les classes suivantes sont crées : 
+
+- Coefficient de sinuosité entre 1 et 1,05 : mauvais état 
+- Coefficient de sinuosité entre 1,05 et 1,25 : état moyen 
+- Coeficient de sinuosité > 1,25 : bon état 
+
+```{r}
+carhyce_hdf_der_ope2 <- carhyce_hdf_der_ope2 %>%
+  mutate(qualite_sinuosite =
+    case_when(
+      coefficient_de_sinuosite >=1 & coefficient_de_sinuosite <=1.05 ~ "Mauvais",
+      coefficient_de_sinuosite > 1.05 & coefficient_de_sinuosite <=1.25  ~ "Moyen",
+      coefficient_de_sinuosite > 1.25 ~ "Bon"
+    )) %>% 
+  mutate(qualite_sinuosite=as.factor(qualite_sinuosite ))
+
+carhyce_hdf_der_ope2$qualite_sinuosite<-
+  ordered(carhyce_hdf_der_ope2$qualite_sinuosite, levels = c("Bon", 
+                                                             "Moyen", 
+                                                             "Mauvais"))
+```
+
+```{r}
+carhyce_hdf_der_ope2 %>% 
+  ggplot(aes(x=qualite_sinuosite, fill= qualite_sinuosite))+
+  geom_histogram(stat="count")+
+  xlab("Classe de qualité de la sinuosité")+
+  ylab("Nombre de stations Carhyce (dernières opérations)")+
+  scale_fill_manual(values=c('Bon'="green3", 
+                             'Moyen'="yellow3",
+                             'Mauvais'="red3"))+
+  labs(fill = "Qualité de
+sinuosité")+
+  theme(legend.title=element_text(size=9))
+```
