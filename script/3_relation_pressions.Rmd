@@ -1,0 +1,274 @@
+---
+title: "Mise en relation des données de pression avec les métriques Carhyce de l'étape
+  \  1 à l'échelle des Hauts-de-France"
+author: "Imane PALAGI"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning=FALSE, message=FALSE)
+```
+
+Le but de ce document est de mettre en relation les données SYRAH-CE de pressions anthropiques avec les métriques Carhyce étudiées précédement (script 2_etape1.Rmd). Ceci afin d'essayer d'expliquer les distrbutions de ces métriques hydromorphologiques par les pressions subies sur les USRA où sont localisées les stations Carhyce. 
+
+```{r}
+#installation et/ou chargement des packages necessaires 
+
+if (!require(pacman)) install.packages("pacman") 
+
+pacman::p_load(tidyverse, openxlsx, ggpubr, janitor) # installe les packages non installés et charge tout
+```
+
+Les données SYRAH-CE proviennent de la table d'attribut du projet QGis SYRAH-CE fourni par Karl Kreutzenberger (Direction Générale de l'OFB) exportée sous format Excel.  Les stations Carhyce disponibles sur l'IED y sont mises en correspondances avec les pressions exercées sur l'USRA où elles se situent pour les années 2012 et 2017. **Ces données ne sont pas publiques et par conséquent ne sont pas fournies avec le projet**.
+
+# I) Constitution d'un data frame des pressions des dernières opérations 
+
+Le but de cette partie est d'aboutir à un data frame rassemblant les métriques hydromorphologiques des dernières opérations carhyce de chaque station (cf. script 2_etape1.Rmd) et les données de pression SYRAH-ce 2012 et 2017 associées à ces stations. 
+
+```{r}
+# import du tableau de correspondance carhyce-syrah
+
+carhyce_syrah<-read.xlsx("raw_data/3_syrah_export_2012_2017_DISC.xlsx")
+
+#import du data frame des dernières opérations carhyce par station 
+
+load(file="raw_data/2_df_derniere_operation.RData")
+load(file="processed_data/2_carhyce_hdf_der_ope_qualite_tot.RData")
+```
+
+Les stations de la Slack à Ambleteuse et de l'Helpe mineure à Maroilles seront renommées/recodées dans le data frame des données syrah-ce en fonction des codes/libellés de la dernière opération en date pour ces stations (tels que ci-dessus), comme cela a été fait pour le data frame des données Carhyce (cf. 1_mise_en_forme.Rmd). Pour rappel, ces deux stations ont été renommées et recodées en cours de suivi : la Slack à Rinxent (1000477) était anciennement notée comme la Slack à Ambleteuse (1090000) et l'Helpe mineur à Grand Fayt (1001131) était notée comme l'Helpe mineur à Maroilles (1006000). 
+
+```{r}
+#modification des noms de colonnes pour avoir des noms "propres" 
+
+carhyce_syrah<-carhyce_syrah %>% 
+  clean_names() # fonction du package "janitor" qui remplace automatiquement les noms de colonnes par des noms "propres" 
+
+```
+
+```{r}
+#remplacement des noms/codes de stations dans le data frame de données Syrah   
+  
+ carhyce_syrah<-carhyce_syrah %>% 
+  mutate(code_station=as.character(code_station)) %>% 
+   dplyr::mutate(code_station = recode(code_station, "1090000" = "1000477", "1006000"= "1001131", 
+                                       .default = code_station),
+         localisation_station_de_mesure = recode(localisation_station_de_mesure, "LA SLACK À AMBLETEUSE (62)" = "LA SLACK À RINXENT (62)", 
+                              "L'HELPE MINEURE À MAROILLES (59)" = "HELPE MINEURE À GRAND FAYT (59)", 
+                              .default = localisation_station_de_mesure),
+         x2012_toponyme_s = recode(x2012_toponyme_s, "LA SLACK À AMBLETEUSE (62)" = "LA SLACK À RINXENT (62)", 
+                              "L'HELPE MINEURE À MAROILLES (59)" = "HELPE MINEURE À GRAND FAYT (59)", 
+                              .default = x2012_toponyme_s),
+         x2017_toponyme_s= recode(x2017_toponyme_s, "LA SLACK À AMBLETEUSE (62)" = "LA SLACK À RINXENT (62)", 
+                              "L'HELPE MINEURE À MAROILLES (59)" = "HELPE MINEURE À GRAND FAYT (59)", 
+                              .default = x2017_toponyme_s),
+         x2017_disc_toponyme_s = recode(x2017_disc_toponyme_s, "LA SLACK À AMBLETEUSE (62)" = "LA SLACK À RINXENT (62)", 
+                              "L'HELPE MINEURE À MAROILLES (59)" = "HELPE MINEURE À GRAND FAYT (59)", 
+                              .default = x2017_disc_toponyme_s)) 
+
+```
+
+```{r}
+#filtre sur les stations carhyce étudiées en hdf (dernières opérations)
+
+codes<-carhyce_hdf_der_ope$Code_sta
+
+carhyce_syrah<-carhyce_syrah %>% 
+  filter(code_station %in% codes) %>% 
+  mutate(date_realisation=as.Date(date_realisation, origin = "1899-12-30")) %>% 
+  dplyr:: group_by(code_station) %>% 
+  filter(date_realisation==max(date_realisation)) %>% 
+  rename(Code_sta=code_station)
+
+#le filtre sur les dernières opérations renseignées dans syrah-ce ne sert pas à selectionner des opérations particulières sur lesquelle travailler puisque les dernières opérations ne sont pas à jour. Il n'est qu'un moyen comme un autre de selectioner une seule ligne par station (toutes les lign)
+ 
+
+```
+
+Maintenant que l'on dispose d'un data frame propore des données syrah-ce pour toutes les stations pour lesquelles les métriques hydromorphologiques ont été calculées, on peut effectuer des jointures afin d'obtenir un data frame contenant en plus les données de métriques (disponibles dans le data frame carhyce_hdf_der_ope_2). 
+
+```{r}
+#jointure des data frame des données carhyce (métriques calculées pour chaque dernières opérations) et syrah 
+
+carhyce_syrah_met<-merge(carhyce_syrah, carhyce_hdf_der_ope2, by="Code_sta")
+
+```
+
+```{r}
+carhyce_syrah_met<-carhyce_syrah_met %>% 
+  mutate(x2012_ratio_drai=as.numeric(x2012_ratio_drai),
+         x2017_ratio_drai=as.numeric(x2017_ratio_drai),
+         x2012_taux_vcom=as.numeric(x2012_taux_vcom),
+         x2017_taux_vcom=as.numeric(x2017_taux_vcom),
+         x2017_disc_ratio_arti=as.numeric(x2017_disc_ratio_arti),
+         x2017_surf_agri=as.numeric(x2017_surf_agri),
+         x2012_taux_recti=as.numeric(x2012_taux_recti),
+         x2017_taux_recti=as.numeric(x2017_taux_recti),
+         x2012_taux_ur=as.numeric(x2012_taux_ur),
+         x2017_taux_ur=as.numeric(x2017_taux_ur),
+         x2012_taux_dig=as.numeric(x2012_taux_dig),
+         x2017_taux_dig=as.numeric(x2017_taux_dig))
+```
+
+# II) Corrélations entre métriques hydromorphologiques et pressions subies à l'USRA 
+
+## 1) % de sédiments fins 
+
+On sait grâce à la littérature que les activités agricoles comme le drainage ou d'urbanisation comme la construction/présence de routes sur le bassin versant peuvent être la cause d'une forte teneur en sédiment fins dans la lit des cours d'eau. Cederholm et Reid (1987) on par exemple montré qu'il existait une relation entre le pourcentage de substrat fins et la surface de BV occupée par les routes, selon la formule suivante : %fines = 5,74 +2,05 SBR (avec SBR : % de la superfcie du BV occupé par des routes). 
+Le drainage et la présence de routes sont deux pressions quantifiées par SYRAH-CE sous la forme des deux indicateurs RATIO_DRAIN (ratio de surface drainée rapportée à l'USRA) et TAUX_VCOM_3W (indicateur de présence de voies de communication à proximité du lit mineur). Deux indicateurs relatifs aux surface agricoles et urbanisées sur le BV contenant les stations Carhyce seront aussi testés (attention, ils sont calculés à partir de données de CLC 2018 et ne seront donc mis en relation qu'avec les opérations du protocole 2017). 
+
+```{r}
+drain_2012_fines <- carhyce_syrah_met %>% 
+  ggplot(aes(x=x2012_ratio_drai, y=X._fines))+
+  geom_point()+
+  xlim(0,1.1)+
+  xlab("Ratio de surface drainée")+
+  ylab("% fines")+
+  ggtitle("SYRAH-CE 2012")
+
+drain_2017_fines <- carhyce_syrah_met %>% 
+  ggplot(aes(x=x2017_ratio_drai, y=X._fines))+
+  geom_point()+
+  xlim(0,1.1)+
+  xlab("Ratio de surface drainée")+
+  ylab("% fines")+
+  ggtitle("SYRAH-CE 2017")
+
+vcom_2012_fines <- carhyce_syrah_met %>% 
+  ggplot(aes(x=x2012_taux_vcom, y=X._fines))+
+  geom_point()+
+  xlab("Taux de présence de 
+voies de communication")+
+  ylab("% fines")+
+  ggtitle("SYRAH-CE 2012")
+
+vcom_2017_fines <- carhyce_syrah_met %>% 
+  ggplot(aes(x=x2017_taux_vcom, y=X._fines))+
+  geom_point()+
+  xlab("Taux de présence de 
+voies de communication")+
+  ylab("% fines")+
+  ggtitle("SYRAH-CE 2017")
+
+ ratio_arti_2017_fines<-carhyce_syrah_met %>% 
+  filter(Version_protocole=="2017") %>% 
+  ggplot(aes(x=x2017_disc_ratio_arti, y=X._fines))+
+  geom_point()+
+  xlab("Ratio d'artificialisation")+
+  ylab("% fines")+
+  ggtitle("SYRAH-CE 2017 disc")
+ 
+ surg_agri_2017_fines<-carhyce_syrah_met %>% 
+  filter(Version_protocole=="2017") %>% 
+  ggplot(aes(x=x2017_surf_agri, y=X._fines))+
+  geom_point()+
+  xlab("% de surface agricole 
+sur le BV")+
+  ylab("% fines")+
+  ggtitle("SYRAH-CE 2017")
+
+
+ggarrange(drain_2012_fines, drain_2017_fines, vcom_2012_fines, vcom_2017_fines, ratio_arti_2017_fines, surg_agri_2017_fines)
+
+```
+
+```{r}
+cor.test(x=carhyce_syrah_met$x2012_taux_vcom, y=carhyce_syrah_met$X._fines, method="kendall")
+```
+
+```{r}
+cor.test(x=carhyce_syrah_met$x2017_taux_vcom, y=carhyce_syrah_met$X._fines, method="kendall")
+```
+
+```{r}
+cor.test(x=carhyce_syrah_met$x2012_ratio_drai, y=carhyce_syrah_met$X._fines, method="kendall")
+```
+
+```{r}
+cor.test(x=carhyce_syrah_met$x2017_ratio_drai, y=carhyce_syrah_met$X._fines, method="kendall")
+```
+
+```{r}
+cor.test(x=carhyce_syrah_met$x2017_disc_ratio_arti, y=carhyce_syrah_met$X._fines, method="kendall")
+```
+
+```{r}
+cor.test(x=carhyce_syrah_met$x2017_surf_agri, y=carhyce_syrah_met$X._fines, method="kendall")
+```
+
+Il n'existe pas de corrélation significative entre les % de sédiments fins des dernières opérations Carhyce et les ratios de drainage de SYRAH-CE 2012 et 2017. On remarque au passage que les ratios de drainage ont peu évolué entre Syrah-ce 2012 et 2017 avec l'actualisation du RGA.  
+De même, la pression relative à la présence de voies de communication n'est pas corrélée au % de sédiments fins, tout comme les surfaces agricoles et artificialisées. 
+
+Aucune corrélation significative n'a pu être mise en évidence entre les pressions choisies et le %fines. 
+
+## 2) Coeficient de sinuosité 
+
+```{r}
+rec_2012_sinuo <- carhyce_syrah_met %>% 
+  ggplot(aes(x=x2012_taux_recti, y=Coef_sinuosite))+
+  geom_point()+
+  xlab("Taux de rectitude")+
+  ylab("Coefficient de sinuosité")+
+  ggtitle("SYRAH-CE 2012")
+
+rec_2017_sinuo <- carhyce_syrah_met %>% 
+  ggplot(aes(x=x2017_taux_recti, y=Coef_sinuosite))+
+  geom_point()+
+  xlab("Taux de rectitude")+
+  ylab("Coefficient de sinuosité")+
+  ggtitle("SYRAH-CE 2017")
+
+ggarrange(rec_2012_sinuo, rec_2017_sinuo)
+
+```
+
+```{r}
+cor.test(x=carhyce_syrah_met$x2017_taux_recti, y=carhyce_syrah_met$Coef_sinuosite, method="kendall")
+```
+
+Il existe une corrélation faible mais statistiquement significative entre le coeficient de sinuosité et le taux de rectitude du tracé en plan du cours d'eau. 
+
+## 3) Score ripisylve 
+
+```{r}
+urb_2012_ripi <- carhyce_syrah_met %>% 
+  ggplot(aes(x=x2012_taux_ur, y=Score_ripisylve))+
+  geom_point()+
+  xlab("Taux d'urbanisation à 100m")+
+  ylab("Score ripisylve")+
+  ggtitle("SYRAH-CE 2012")
+
+urb_2017_ripi <- carhyce_syrah_met %>% 
+  ggplot(aes(x=x2017_taux_ur, y=Score_ripisylve))+
+  geom_point()+
+  xlab("Taux d'urbanisation à 100m")+
+  ylab("Score ripisylve")+
+  ggtitle("SYRAH-CE 2017")
+
+ggarrange(urb_2012_ripi, urb_2017_ripi)
+```
+
+
+```{r}
+cor.test(x=carhyce_syrah_met$x2017_taux_ur, y=carhyce_syrah_met$Score_ripisylve, method="kendall")
+```
+
+Pas de corrélation significative. 
+
+## 4) Puissance spécifique de plein bord 
+
+Laissé tombé, une seule modalité dans les facteurs liés aux barrages dans 2017 disc 
+
+## 5) Qb_Q2
+
+```{r}
+carhyce_syrah_met %>% 
+  mutate(x2017_disc_tx_etgt=as.factor(x2017_disc_tx_etgt)) %>% 
+  ggplot(aes(x=x2017_disc_tx_etgt, y=Qb_Q2))+
+  geom_boxplot()+
+  xlab("Densitée pondérée d'OE")+
+  ylab("Rapport Qb/Q2")+
+  ggtitle("SYRAH-CE 2017")
+```
+
