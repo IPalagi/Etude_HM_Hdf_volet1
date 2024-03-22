@@ -9,7 +9,8 @@ Le projet comprend les dossiers :
 - raw_data : données brutes utilisées dans les scripts, numérotées selon le numéro du Rmarkdown dans lequel elles sont utilisées
 - processed_data : données en sortie des scripts, numérotées selon le numéro du Rmarkdown dans lequel elles sont produites
 - output : éventuelles productions telles que les graphiques, cartes, fichiers html ou pdf, ou tableaux de données utiles mais non réutilisés dans les scripts
-- scripts : scripts du projet (Rmarkdown) 
+- scripts : scripts du projet (Rmarkdown)
+- images : images (png) utilisées pour les fiches station Carhyce (script 5) 
 
 
 
