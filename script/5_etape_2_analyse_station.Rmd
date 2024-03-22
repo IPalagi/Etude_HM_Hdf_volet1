@@ -45,7 +45,6 @@ Cette analyse s'inscrit dans le cadre du deuxième volet de l'étude "état hydr
 
 La première étape de ce volet de l'étude est la réalisation de "fiches d'identité" des stations à étudier, permettant la visualisation et l'interprétation de l'évolution d'un certain nombre de métriques hydromorphologiques issues des données Carhyce. Même si ce volet de l'étude ne se concentre que sur un nombre réduit de stations, ces fiches (présent document) sont conçues pour pouvoir être reproduites facilement pour n'importe quelle station Carhyce des Hauts-de-France. Elles pourront donc être valorisées hors du cadre de l'étude "état hydromorphologique des cours d'eau des Hauts-de-France". 
 
-
 ## Informations à destination des producteurs des fiches stations Carhyce 
 
 
@@ -94,7 +93,7 @@ df_carhyce %>%
   kable_styling()
 ```
 
-Elle appartient à l'hydroécorégion 1 :
+Son bassin versant appartient en totalité ou en majorité à l'hydroécorégion 1 :
 
 ```{r HER1}
 df_carhyce %>% 
@@ -107,13 +106,21 @@ df_carhyce %>%
 
 ```{r localisation station}
 
+mapviewOptions(basemaps = c("OpenStreetMap", "OpenTopoMap", "Esri.WorldImagery")) # choix des fonds cartographiques à afficher 
+
 map_station<-st_as_sf( #conversion du data frame de données Carhyce en objet sf
   df_carhyce,
   coords = c("x","y"), #les colonne contenant les coordonnées sont "x" et "y"
   crs = 2154 # système de coordonnées = Lambert 93 (EPSG 2154)
 )
 
-mapview(map_station) #affichage de la carte interactive 
+map_station_geomWGS <-st_transform(map_station, 4326) # transformer les coordonnées de la station de Lambert 93 à WGS84 pour une utilisation plus facile de leaflet 
+
+center_coord<- c(st_coordinates(map_station_geomWGS)[1],st_coordinates(map_station_geomWGS)[2])  # création d'un vecteur numérique contenant les coordonnées en WGS84 de la station, pour centrer le mapview et régler le zoom initial  
+
+x<-mapview(map_station_geomWGS, alpha.region = 1, col.region = "red", color = "red", layer.name = "station Carhyce") #création du mapview de la station 
+
+x@map %>%  setView(center_coord[1], center_coord[2], zoom= 14) # centrer le mapview sur la station avec un zoom initial de 14 
 
 ```
 
