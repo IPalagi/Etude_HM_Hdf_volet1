@@ -1,5 +1,5 @@
 ---
-title: "Etude de l'évolution de l'hydromorphologie au niveau d'une station Carhyce"
+title: "Etude de l'évolution de l'hydromorphologie au niveau de la station Carhyce `r params$code_station`"
 author: "Imane PALAGI"
 date: "`r Sys.Date()`"
 output:

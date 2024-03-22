@@ -12,7 +12,7 @@ knitr::opts_chunk$set(echo = TRUE, warning=FALSE, message=FALSE)
 
 Le but de ce document est de préparer les données à utiliser pour le volet 2 de l'étude "évaluation de l'état hydromorphologique des cours d'eau de Hauts-de-France". Ce volet a pour objectif de se concentrer sur les liens entre hydromorphologie et pressions anthropiques à l'endroit de stations Carhyce pour lesquelles une évolution notable de l'état hydromorphologique est constatée. 
 
-La mise en forme des données nécessaires au volet 2 comprend la sélection des stations à étudier et la construction des data frame de données relatives à ces stations. 
+La mise en forme des données nécessaires au volet 2 comprend la sélection des stations à étudier et la construction des data frames de données relatives à ces stations. 
 
 ```{r}
 #chargement library necessaires 
