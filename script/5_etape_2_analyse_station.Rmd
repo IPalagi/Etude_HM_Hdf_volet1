@@ -45,7 +45,6 @@ Cette analyse s'inscrit dans le cadre du deuxième volet de l'étude "état hydr
 
 La première étape de ce volet de l'étude est la réalisation de "fiches d'identité" des stations à étudier, permettant la visualisation et l'interprétation de l'évolution d'un certain nombre de métriques hydromorphologiques issues des données Carhyce. Même si ce volet de l'étude ne se concentre que sur un nombre réduit de stations, ces fiches (présent document) sont conçues pour pouvoir être reproduites facilement pour n'importe quelle station Carhyce des Hauts-de-France. Elles pourront donc être valorisées hors du cadre de l'étude "état hydromorphologique des cours d'eau des Hauts-de-France". 
 
-**Ce document n'est ainsi pas spécifique à une station en particulier : il est sensé pouvoir être utilisé pour étudier n'importe quelle station Carhyce des Hauts-de-France pour laquelle on dispose d'un code de station (toutes prospections y compris hors OFB). Ainsi, l'évolution de l'hydromorphologie ne sera pas interprétée finement (explication fine des processus, présentation des conclusions sur l'état hydromorphologique de la station etc.) ou mise en relation avec le dire d'expert, car ceci est dépendant de la station étudiée. En revanche, pour chaque métrique, une explication de celle-ci ainsi que des éléments aidant l'interprétation (valeurs seuils, classes de qualité etc.) seront fournis pour aider le lecteur à comprendre les résultats présentés.**
 
 ## Informations à destination des producteurs des fiches stations Carhyce 
 
