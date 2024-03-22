@@ -1,4 +1,4 @@
-# Etude_HM_Hdf_volet1
+# Etude_hydromorpho_Hdf
 Premier volet de l'étude de l'état hydro morphologique des cours d'eau de Hauts-de-France par l'étude des stations Carhyce (OFB) : étude globale des dernières opérations de toutes les stations de la région. Le but est de caractériser l'état de plusieurs métriques hydrmorphologiques issues des données Carhyce relatives à la géométrie hydraulique, à la granulométrie, la ripisylve et l'hydrologie des cours d'eau suivis par l'OFB sur toutes les stations de la région. Ces métriques sont mises en relation avec les pressions anthropiques subies (données SYRAH-CE à l'échelle de l'USRA). 
 
 Les données utilisées dans les scripts 1 et 2 sont publiques et disponibles sur Internet. Les données utilisée dans le script 3 ne seront en revanche pas fournies. 
