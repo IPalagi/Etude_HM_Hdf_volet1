@@ -14,9 +14,9 @@ knitr::opts_chunk$set(echo = TRUE, message=FALSE, warning=FALSE)
 
 Le but de ce document est de créer des data frame de données à partir desquels travailler pour le projet "état des lieux de l'hydromorphologie des cours d'eau de Hauts-de-France". Ces données seront essentiellement issues des protocoles Carhyce (caractérisation hydromorphologique à l'échelle de la station). Les tableaux de données initiaux seront issus d'exports depuis l'IED Carhyce (lien : <https://analytics.huma-num.fr/ied_carhyce/>) au format csv.
 
-Les exports IED Carhyce se font par HER 1, cours d'eau ou station. Les données importées initiallement seront donc celles de toutes les stations des HER 1 présentes en Hauts-de-France, à savoir :
+Les exports IED Carhyce se font par HER 1, cours d'eau ou station. Les données importées initialement seront donc celles de toutes les stations des HER 1 présentes en Hauts-de-France, à savoir :
 
--   Les tables calcaires 
+-   Les tables calcaires
 -   Les dépots argilo-sableux
 -   Les ardennes
 -   Les côtes calcaires Est
@@ -211,7 +211,7 @@ save(hydro_carhyce_vf, file="processed_data/1_Qb_Q2.RData")
 Dans le cas où les données de Q2 ne sont pas disponibles ou qu'on ne souhaite pas les importer depuis l'Hydro Portail, il est également possible de les recalculer à partir des chroniques de débits journaliers. Pour cela, une fonction "function_QT" (cf. file="functions/1_Mise_en_forme.R") est crée, se basant sur la fonction ProbPlot du package "FloodFreqPlot". 
 **Attention: les valeurs de Q2 résultantes de cette méthode de calcul ne seront pas forcément les mêmes que sur l'Hydro Portail, du fait de l'incertitude de la valeur de Q2** (mais elles sont sensées se situer dans l'intervalle de confiance affiché sur l'Hydro Portail). 
 
-La fonction de calcul du débit de crue de période de retour T à l'endroit d'une stations pour laquelle on dispose d'une chronique de débits sur l'Hydro Portail necessitera d'avoir les informations suivantes :
+La fonction de calcul du débit de crue de période de retour T à l'endroit d'une stations pour laquelle on dispose d'une chronique de débits sur l'Hydro Portail nécessitera d'avoir les informations suivantes :
 
 -   le code de la station en question au format caractère (code_station)
 -   les dates de début et de fin de la chronique de débits sur laquelle on souhaite calculer le Q2 au format caractère année-mois-jour (debut et fin)

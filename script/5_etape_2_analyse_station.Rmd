@@ -1,0 +1,589 @@
+---
+title: "Etude de l'évolution de l'hydromorphologie au niveau d'une station Carhyce"
+author: "Imane PALAGI"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: yes
+    toc_depth: 4
+    df_print: kable
+params:
+  code_station: "1010000"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning=FALSE, message=FALSE)
+```
+
+```{r packages et fonctions}
+
+#installation et/ou chargement des packages nécessaires 
+
+if (!require(pacman)) install.packages("pacman") 
+
+pacman::p_load(tidyverse, janitor, ggpubr, 
+               ggiraphExtra, sf, mapview, 
+               leaflet, kableExtra) # installe les packages non installés et charge tout
+
+
+#installation des fonctions nécessaires 
+
+source("functions/5_analyse_station.R")
+
+```
+
+# Introduction
+
+## Contexte général 
+
+Le but de ce document (fiche station automatisée) est d'analyser l'évolution de l'hydromorphologie au niveau d'une station Carhyce, en essayant des les mettre en parallèle avec les pressions anthropiques subies au niveau de cette station. 
+Cette analyse s'inscrit dans le cadre du deuxième volet de l'étude "état hydromorphologique des cours d'eau des Hauts-de-France", étude portée par la DR des Hauts-de-France de l'OFB d'octobre à fin décembre 2023. Ce volet vise à analyser le plus en détails possible l'hydromorphologie et le lien avec les pressions anthropiques au niveau d'un faible de nombre de stations préalablement identifiées comme présentant :
+
+-   Une évolution notable de leur hydromorphologie (en se basant sur 6 métriques relatives à la géométrie hydraulique, l'hydrologie, la ripisylve, la granulométrie et la sinuosité).
+
+-   Des contextes de pressions variés (en se basant sur une pression par grande catégorie de pressions : agriculture, artificialisation, continuité, usages).
+
+La première étape de ce volet de l'étude est la réalisation de "fiches d'identité" des stations à étudier, permettant la visualisation et l'interprétation de l'évolution d'un certain nombre de métriques hydromorphologiques issues des données Carhyce. Même si ce volet de l'étude ne se concentre que sur un nombre réduit de stations, ces fiches (présent document) sont conçues pour pouvoir être reproduites facilement pour n'importe quelle station Carhyce des Hauts-de-France. Elles pourront donc être valorisées hors du cadre de l'étude "état hydromorphologique des cours d'eau des Hauts-de-France". 
+
+**Ce document n'est ainsi pas spécifique à une station en particulier : il est sensé pouvoir être utilisé pour étudier n'importe quelle station Carhyce des Hauts-de-France pour laquelle on dispose d'un code de station (toutes prospections y compris hors OFB). Ainsi, l'évolution de l'hydromorphologie ne sera pas interprétée finement (explication fine des processus, présentation des conclusions sur l'état hydromorphologique de la station etc.) ou mise en relation avec le dire d'expert, car ceci est dépendant de la station étudiée. En revanche, pour chaque métrique, une explication de celle-ci ainsi que des éléments aidant l'interprétation (valeurs seuils, classes de qualité etc.) seront fournis pour aider le lecteur à comprendre les résultats présentés.**
+
+## Informations à destination des producteurs des fiches stations Carhyce 
+
+
+```{r code station}
+
+station <- params$code_station #code station (sans le 0 du début)
+
+```
+
+Les fichiers à télécharger par l'utilisateur pour faire tourner ce script correctement sont :
+
+-   les fichiers csv des données Carhyce des HER Tables calcaires, Ardennes, Dépôts argilo-sableux et Côtes calcaires est, tels que téléchargés depuis l'IED Carhyce (<https://analytics.huma-num.fr/ied_carhyce/>).
+
+Ces fichiers doivent être les plus récents possibles. Ils devront être rangés dans le dossier raw_data et nommés de la manière suivante :
+
+-   1_Export_ardennes
+
+-   1_Export_cotes_calcaires_est
+
+-   1_Export_depots_argilo_sableux
+
+-   1_Export_tables_calcaires
+
+
+[Note]{.underline}: s'assurer que le Rmardown est réglé sur "Project directory" (à régler dans knit -> knit directory). 
+
+# I) Localisation de la station dans les Hauts-de-France
+
+```{r df données carhyce}
+
+#La première étape pour pouvoir visualiser les données disponibles pour la station à étudier est de
+#créer un tableau qui contient les données de cette station. 
+#Pour cela, la fonction df_creation sera utilisée. Elle ne nécessite pour fonctionner que l'objet "station" 
+#(cf. chunck 3 : code station). 
+
+df_carhyce<-df_creation(station) #création du data frame de données Carhyce pour la station 
+```
+
+La station présentée dans le présent document est la station :
+
+```{r nom station}
+
+df_carhyce %>% 
+  distinct(localisation_station_de_mesure, code_station) %>% #un seul exemplaire de localisation
+  kbl() %>%             #mise en forme 
+  kable_styling()
+```
+
+Elle appartient à l'hydroécorégion 1 :
+
+```{r HER1}
+df_carhyce %>% 
+  distinct(nom_her_ou_dom_dominant) %>%  # un seul exemplaire de la colonne HER
+  kbl() %>%                      #mise en forme
+  kable_styling()
+```
+
+[**Carte interactive : localisation de la station Carhyce (toutes les coordonnées disponibles)**]{.underline} (note : si besoin, dé zoomer)
+
+```{r localisation station}
+
+map_station<-st_as_sf( #conversion du data frame de données Carhyce en objet sf
+  df_carhyce,
+  coords = c("x","y"), #les colonne contenant les coordonnées sont "x" et "y"
+  crs = 2154 # système de coordonnées = Lambert 93 (EPSG 2154)
+)
+
+mapview(map_station) #affichage de la carte interactive 
+
+```
+
+# II) Evolution des métriques Carhyce
+
+Les opérations disponibles sont celles des années :
+
+```{r années}
+
+df_carhyce %>% 
+  mutate(annee=year(date_realisation)) %>% #création colonne d'années 
+  select(annee) %>%            #sélection de la colonne 
+  kbl(align="l") %>%  #mise en forme
+  kable_styling() 
+```
+
+correspondant aux opérations :
+
+```{r opérations}
+
+df_carhyce %>% 
+  select(identifiant_operation) %>%            #sélection des opérations
+  kbl(align="l") %>%  #mise en forme
+  kable_styling()  #affichage des valeurs de la colonne d'id opération 
+```
+
+[**Attention**]{.underline} Les métriques présentées dans cette partie sont telles qu'extraites de l'IED Carhyce. Aucune mise en qualité des données supplémentaire n'est effectuée. Il sera donc à garder à l'esprit qu'il n'est pas impossible de rencontrer des valeurs aberrantes (erreur de saisie etc.) ou des valeurs manquantes (NA).
+
+## 1) Métriques de géométrie hydraulique
+
+Les métriques de géométrie hydraulique présentées dans cette partie sont l'**IMG** (Indice Morphologique Global), ses **6 métriques** ainsi que leur **écart à la référence**. Ces métriques sont :
+
+-   Le rapport largeur/profondeur de plein bord (abrégé L/P Qb)
+
+-   La largeur à plein bord (abrégée L Qb)
+
+-   La surface mouillée à plein bord (abrégée Sm Qb)
+
+-   La pente de la ligne d'eau
+
+-   La profondeur maximale à plein bord (abrégée Pmax Qb)
+
+-   La profondeur des mouilles (abrégée P mouilles)
+
+L'IMG est calculé comme la somme des écarts à la référence pour chaque métrique. Cet écart à la référence représente les résidus aux modèles de référence pour chaque HER 1. Ces derniers sont construits à partir des valeurs de la métrique considérée en fonction de la surface du bassin versant (BV) pour chaque station d'un HER 1 considérée comme pas ou peu altérée du point de vue de son hydromorphologie.
+
+L'IMG représente donc l'écart globale à la référence pour la géométrie hydraulique. Il s'interprète comme suit :
+
+-   IMG \< **4,5** : **très faible** écart la référence
+-   IMG entre **4,5 et 6** : **faible** écart à la référence
+-   IMG entre **6 et 7,5** : écart **moyen** à la référence
+-   IMG entre **7,5 et 9** : écart **fort** à la référence
+-   IMG \> **9** : écart **très fort** à la référence
+
+(pour plus d'explications, voir IED Carhyce : <https://analytics.huma-num.fr/ied_carhyce/> fenêtre "Indicateur global")
+
+```{r graph IMG}
+df_carhyce %>% 
+  mutate(classe_ecart_img=as.factor(classe_ecart_img)) %>% 
+  mutate(classe_ecart_img = fct_relevel(classe_ecart_img, "tres faible", "faible", 
+                                      "moyen", "fort", "tres fort")) %>% 
+  ggplot(aes(x=date_realisation, y=img, color= classe_ecart_img))+
+  geom_point(size=4)+
+  geom_line(color="black", linetype = "dashed")+
+  ylim(0,15)+
+  xlab("Date")+
+  ylab("IMG")+
+  labs(color = "Ecart à la référence")+
+  ggtitle("Evolution de l'IMG en fonction du temps")+
+  theme(plot.title = element_text(hjust = 0.5))+
+  scale_color_manual(values=c("tres faible" ="green4",
+                              "faible"="chartreuse",
+                              "moyen"="gold",
+                              "fort"="orangered1",
+                              "tres fort"="red4"))
+
+```
+
+L'IMG étant un indicateur synthétique de l'état global de la géométrie hydraulique, son interprétation ne peut être dissociée de celle de ses métriques. Ci-dessous sont représentées les évolutions des métriques de l'IMG sous forme de graphiques radar interactifs, à la fois pour les métriques brutes et pour les écarts standardisés (en valeurs absolues) aux modèles de références pour ces mêmes métriques :
+
+```{r}
+met1<-df_carhyce %>% 
+ggplot(aes(x=date_realisation, y=rapport_largeur_profondeur_qb))+
+  geom_point(size=2)+
+  geom_line(color="black", linetype = "dashed")+
+  xlab("Date")+
+  ylab("L/P Qb")+
+ # scale_x_date(date_breaks = "2 years",
+              # date_labels = "%Y")+
+  theme(axis.text.x = element_text(angle = 90))
+
+met2<-df_carhyce %>% 
+ggplot(aes(x=date_realisation, y=largeur_plein_bord_evaluee_m))+
+  geom_point(size=2)+
+  geom_line(color="black", linetype = "dashed")+
+  xlab("Date")+
+  ylab("L Qb (en m)")+
+  #scale_x_date(date_breaks = "2 years",
+               #date_labels = "%Y")+
+  theme(axis.text.x = element_text(angle = 90))
+
+met3<-df_carhyce %>% 
+ggplot(aes(x=date_realisation, y=surface_mouillee_qb_m2))+
+  geom_point(size=2)+
+  geom_line(color="black", linetype = "dashed")+
+  xlab("Date")+
+  ylab("Sm Qb (en m^2)")+
+  #scale_x_date(date_breaks = "2 years",
+               #date_labels = "%Y")+
+  theme(axis.text.x = element_text(angle = 90))
+
+met4<-df_carhyce %>% 
+ggplot(aes(x=date_realisation, y=pente_ligne_d_eau))+
+  geom_point(size=2)+
+  geom_line(color="black", linetype = "dashed")+
+  xlab("Date")+
+  ylab("pente")+
+  #scale_x_date(date_breaks = "2 years",
+               #date_labels = "%Y")+
+  theme(axis.text.x = element_text(angle = 90))
+
+met5<-df_carhyce %>% 
+ggplot(aes(x=date_realisation, y=profondeur_maximum_qb_m))+
+  geom_point(size=2)+
+  geom_line(color="black", linetype = "dashed")+
+  xlab("Date")+
+  ylab("P max (en m)")+
+  #scale_x_date(date_breaks = "2 years",
+               #date_labels = "%Y")+
+  theme(axis.text.x = element_text(angle = 90))
+
+met6<-df_carhyce %>% 
+ggplot(aes(x=date_realisation, y=profondeur_moyenne_des_mouilles_m))+
+  geom_point(size=2)+
+  geom_line(color="black", linetype = "dashed")+
+  xlab("Date")+
+  ylab("P mouilles (en m)")+
+  #scale_x_date(date_breaks = "2 years",
+               #date_labels = "%Y")+
+  theme(axis.text.x = element_text(angle = 90))
+
+plot<-ggarrange(met1,met2,met3,met4,met5,met6)
+annotate_figure(plot, top = text_grob("Evolution des métriques (brutes) de l'IMG en fonction du temps",
+                                      size=13))
+```
+
+**Evolution des résidus standardisés (en valeurs absolues) aux modèles de référence pour les métriques de l'IMG**
+
+```{r radar 2}
+df_carhyce %>% 
+  mutate(annee=year(date_realisation),
+         L_P_Qb=abs(residu_standardise_modele_rapport_largeur_profondeur_qb),
+         L_Qb=abs(residu_standardise_modele_largeur_mouillee_qb),
+         Sm_Qb=abs(residu_standardise_modele_surface_mouillee_qb),
+         pente=abs(residu_standardise_modele_pente_ligne_d_eau),
+         Pmax_Qb=abs(residu_standardise_modele_profondeur_qb),
+         P_mouilles=abs(residu_standardise_modele_profondeur_mouilles)) %>% 
+  select(annee, L_P_Qb,
+         L_Qb,
+         Sm_Qb,
+         pente,
+         Pmax_Qb,
+         P_mouilles) %>%
+  
+  ggRadar(
+    mapping= aes(colours=annee),
+          rescale = FALSE, interactive = TRUE, use.label = TRUE, size = 2,
+         legend.position = "right", alpha=0.1,
+         )
+```
+
+Pour le graphique ci-dessus représentant les écarts standardisés (en valeurs absolues) au modèle de référence pour les métriques de l'IMG, plus un point est proche du centre du radar, plus la métrique qu'il représente est proche de la référence (c'est à dire l'état des stations pas ou peu altérées du point de vue de leur hydromorphologie). D'après l'IED Carhyce :
+
+\- **68%** des stations de référence ont les résidus standardisés de leurs métriques compris dans l'intervalle **[0;1]**
+
+\- **27%** des stations de référence ont les résidus standardisés de leurs métriques compris dans l'intervalle **[1;2]**
+
+\- **4%** des stations de référence ont les résidus standardisés de leurs métriques compris dans l'intervalle **[2;3]**
+
+\- **1%** des stations de référence ont les résidus standardisés de leurs métriques **\>3**
+
+## 2) Métriques de dynamique du cours d'eau
+
+Les métriques présentées dans cette partie sont :
+
+-   La **puissance spécifique de plein bord**. Elle représente la capacité d'un cours d'eau à travailler. Elle permet de donner une indication sur la capacité d'un cours d'eau à s'auto-ajuster. Elle est calculée sur l'IED Carhyce à partir de la pente de la ligne d'eau, du débit de plein bord et de la largeur mouillée à plein bord (1000\* 9.81\* pente\* Qb /largeur Qb).
+-   Le **débit de plein bord** (abrégé Qb). Il représente le débit contenu dans le lit mineur du cours d'eau avant débordement. L'étude de son évolution peut aider l'interprétation de l'évolution de la puissance spécifique de plein bord (puissance spécifique calculée à partir de Qb). 
+-   La **force tractrice** (agrégée Ft). Elle représente la force exercée par le courant sur le lit et les berges du cours d'eau, induisant le déplacement des particules de sol. Elle est calculée sur l'IED Carhyce à partir de la pente de la ligne d'eau et du rayon hydraulique à plein bord (9.81\* pente\* rayon hydraulique Qb). Elle permet également d'aider l'interprétation de l'évolution de la puissance spécifique : la puissance spécifique peut s'exprimer en fonction de Ft dans certaines équations (Petit et al., 2000).
+
+[**Attention :**]{.underline} L'estimation des Qb peut être peu fiable : certains débits de plein bord sont estimés grâce à la formule de Manning-Strickler à partir des résultats d'un seul passage Carhyce. Or, cette formule repose sur un certain nombre d'hypothèses qui ne sont souvent pas respectées dans la réalité, amenant à des Qb possiblement peu fiables lorsqu'ils sont calculés par cette méthode. Ainsi, la fiabilité de la puissance spécifique, calculé à partir du Qb, est aussi sujette à discussion. La confiance à accorder à ces deux métriques est indiquée comme "Faible" dans le rapport sur la mise en place de l'IED Carhyce (Tamisier et al., 2017). La confiance à accorder à la métrique Ft est elle notée comme "Bonne". 
+
+Afin d'aider l'interprétation de la puissance spécifique, **5 classes de puissances sont construites** :
+
+-   Classe 1 : **\<15 W/m2**, cours d'eau de faible puissance, généralement **inactifs**.
+-   Classe 2 : entre **15 et 35 W/m2**, cours d'eau de puissance faible à moyenne généralement **insuffisante pour que le cours d'eau s'ajuste** aux contraintes extérieures.
+-   Classe 3 : entre **35 et 100 W/m2**, cours d'eau de puissance moyenne à forte, **suffisantes pour un ajustement** du cours d'eau aux contraintes.
+-   Classe 4 : entre **100 et 200 W/m2**, cours d'eau de forte à très forte puissance, à **forte dynamique d'ajustement** aux contraintes.
+-   Classe 5 : **\> 200 W/m2**, cours d'eau de très forte puissance, transportant une **charge caillouteuse grossière**.
+
+Ces classes sont à prendre à titre indicatif : elles se basent sur les classes de puissance évoquées dans la littérature et ne peuvent donc pas être représentatives de tous les cours d'eau. De plus, la capacité d'un cours d'eau à s'ajuster ne dépend pas uniquement de sa puissance spécifique de plein bord, mais également de l'érodabilité de ses berges et des apports solides venant de l'amont.
+
+```{r classes puissance}
+
+df_carhyce<-df_carhyce %>%  # création colonne contenant la classe de puissance 
+  mutate(classe_puissance = case_when( # en fonction des valeurs de puissance 
+    puissance_specifique_qb_w_m2 < 15 ~ "classe_1",
+    puissance_specifique_qb_w_m2 >= 15 & 
+      puissance_specifique_qb_w_m2 < 35 ~ "classe_2",
+    puissance_specifique_qb_w_m2 >= 35 &
+      puissance_specifique_qb_w_m2 < 100 ~ "classe_3", 
+    puissance_specifique_qb_w_m2 >= 100 &
+      puissance_specifique_qb_w_m2 < 200 ~ "classe_4", 
+    puissance_specifique_qb_w_m2 >= 200 ~ "classe_5"
+  ))
+```
+
+```{r graph puissance}
+
+df_carhyce %>% 
+  ggplot(aes(x=date_realisation, y=puissance_specifique_qb_w_m2, color= classe_puissance))+
+  geom_point(size=4)+
+  geom_line(color="black", linetype = "dashed")+
+  ylim(0,NA)+
+  xlab("Date")+
+  ylab("Puissance spécifique Qb (W/m^2)")+
+  labs(color = "Classe de puissance")+
+  ggtitle("Evolution de la puissance spécifique Qb en fonction du temps")+
+  theme(plot.title = element_text(hjust = 0.5))+
+  scale_color_manual(values=c("classe_1"="violetred3",
+                              "classe_2"="plum3",
+                              "classe_3"="cyan2",
+                              "classe_4"= "dodgerblue",
+                              "classe_5"="midnightblue"))
+```
+
+Le Qb, intervenant dans le calcul de la puissance spécifique Qb évolue lui comme tel :
+
+```{r graph Qb}
+
+df_carhyce %>% 
+  ggplot(aes(x=date_realisation, y=debit_plein_bord_m3_s))+
+  geom_point(size=4)+
+  geom_line(color="black", linetype = "dashed")+
+  xlab("Date")+
+  ylab("Débit de plein bord (m^3/s)")+
+  ggtitle("Evolution du débit de plein bord (Qb) en fonction du temps")+
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+[Note]{.underline} : Pour expliquer l'évolution de la puissance spécifique Qb, se référer également à l'évolution de la pente de la ligne d'eau et de la largeur à plein bord (cf. II) 1)).
+
+```{r graph Ft}
+df_carhyce %>% 
+  ggplot(aes(x=date_realisation, y=force_tractrice_qb_n_m2))+
+  geom_point(size=4)+
+  geom_line(color="black", linetype = "dashed")+
+  xlab("Date")+
+  ylab("Force tractrice (N/m^2)")+
+  ggtitle("Evolution de la force tractrice en fonction du temps")+
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+## 3) Métriques de granulométrie
+
+Les métriques présentées dans cette partie sont :
+
+-   La **composition granulométrique** du substrat du lit, c'est-à-dire les % des différentes fractions granulométriques (fines, graviers/cailloux et blocs/rochers) à l'échelle de la station.
+-   Le % de **sédiments fins** (abrégé %fines). Il donne une indication sur le risque de colmatage du substrat (perte de porosité et de connexion avec la nappe) et sur la qualité de l'habitat aquatique benthique.
+-   L'indice de **tri de Folk et Ward** (Folk et Ward, 1957). Il donne une indication sur la variabilité/diversité dans les tailles de particules du substrat au niveau d'un radier.
+
+```{r df comp granulo}
+
+# création d'un data frame qui synthétise la granulométrie dans une seule colonne
+# pour le graphique de composition granulométrique 
+
+comp_granulo<-df_carhyce %>% 
+  select(date_realisation, x_fines, x_graviers_cailloux, x_blocs_rochers) %>% 
+  reshape2::melt(id.vars = "date_realisation")
+
+```
+
+```{r graph comp granulo}
+
+comp_granulo %>% 
+  mutate(annee=year(date_realisation)) %>% 
+  mutate(annee=as.factor(annee)) %>%
+  ggplot(aes(x=annee, y=value, fill=variable))+
+  geom_bar(position="stack", stat="identity")+
+  xlab("Année")+
+  ylab("Composition granulométrique (en %)")+
+  ggtitle("Evolution de la composition granulométrique du substrat 
+  en fonction de l'année de prospection")+
+  theme(plot.title = element_text(hjust = 0.5))+
+  scale_fill_brewer(name = "Fraction", 
+                      labels = c("fines", "graviers/cailloux", "blocs/rochers"), 
+                      palette= "Set1")+
+  geom_text(aes(label = value), position = position_stack(vjust = 0.5),
+            size=3)
+
+```
+
+Le %fines est probablement la fraction la plus révélatrice d'une possible altération de la qualité hydromorphologique du cours d'eau relative au substrat du lit mineur. En effet l'augmentation du %fins peut avoir un impact négatif sur le cours d'eau, autant au niveau de sa biodiversité (habitats peu propices à certaines espèces de poissons ou de macro-invertébrés par exemple), que de la qualité de l'eau (transport dans les sédiments fins de polluants), de sa connectivité avec la nappe, ou encore du succès des opérations de restauration hydromorphologique (Brettschneider et. al, 2023) (Descloux, 2011).
+
+Afin d'aider l'interprétation du %fines, on peut retenir les 2 valeurs seuils suivantes, qui tentent de synthétiser les "seuils de qualité" relatifs au %fines trouvés dans la littérature :
+
+-   **15%** fines : en dessous de ce seuil, le substrat peut généralement être considéré de très bonne qualité pour la biodiversité aquatique benthique.
+-   **30%** fines : au dessus de ce seuil, la porosité du substrat est généralement nulle ou quasi-nulle, et le substrat peut être considéré comme de mauvaise qualité pour la biodiversité aquatique benthique.
+
+```{r graph fines}
+
+df_carhyce %>% 
+  ggplot(aes(x=date_realisation, y=x_fines))+
+  geom_point(size=3)+
+  geom_line(color="black", linetype = "dashed")+
+  geom_hline(aes(yintercept=15), color="green2")+
+  geom_hline(aes(yintercept=30), color="red2")+
+  ylim(0,100)+
+  xlab("Date")+
+  ylab("% sédiments fins")+
+  ggtitle("Evolution du % fines en fonction du temps")+
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+Sur le graphique ci-dessus, la droite verte représente le seuil de 15% de fines et la droite rouge le seuil de 30%.
+
+L'indice de tri de Folk et Ward dans Carhyce caractérise le tri des particules du substrat au niveau d'un radier, c'est à dire la variabilité des tailles de particules. Il s'interprète comme présenté en Figure 1 (schéma repris de l'IED Carhyce, onglet "Graphiques" -\> "Granulométrie) :
+
+![ **[Figure 1 : schématisation de l'interprétation de l'indice de tri de Folk et Ward]{.underline}**](../images/schema_F&W.PNG)
+
+**Attention** : les classes de tri de l'indice de Folk et Ward présentées ci-dessus ne sont pas des classes de qualité du substrat. 
+
+```{r classes FW}
+
+df_carhyce<-df_carhyce %>% 
+  mutate(classe_FW=case_when(
+    indice_folk_et_ward>4 ~ "extremement mal trie",
+    
+    indice_folk_et_ward <=4 &
+      indice_folk_et_ward >2 ~ "tres mal trie",
+    
+    indice_folk_et_ward <= 2 &
+      indice_folk_et_ward > 1 ~ "mal trie",
+    
+    indice_folk_et_ward <=1 &
+      indice_folk_et_ward > 0.71 ~ "moderement trie",
+    
+    indice_folk_et_ward <= 0.71 &
+      indice_folk_et_ward > 0.5 ~ "moderement bien trie",
+    
+    indice_folk_et_ward <= 0.5 &
+      indice_folk_et_ward >= 0.35 ~ "bien trie",
+    
+    indice_folk_et_ward <0.35 ~ "tres bien trie"
+  ))
+```
+
+```{r graph FW}
+
+df_carhyce %>% 
+  mutate(classe_FW = as.factor(classe_FW)) %>% 
+  mutate(classe_FW = fct_relevel(classe_FW, "extremement mal trie", "tres mal trie",
+                                 "mal trie", "moderement trie", "moderement bien trie",
+                                 "bien trie", "tres bien trie")) %>% 
+  ggplot(aes(x=date_realisation, y=indice_folk_et_ward, color= classe_FW))+
+  geom_point(size=4)+
+  geom_line(color="black", linetype = "dashed")+
+  ylim(0,5)+
+  xlab("Date")+
+  ylab("Indice de tri de Folk & Ward (sans unité)")+
+  scale_color_manual(values=c("extremement mal trie"="red4", "tres mal trie"="red",
+                                 "mal trie"="deeppink2", "moderement trie"="gold", 
+                              "moderement bien trie"="darkolivegreen2",
+                                 "bien trie"="green", "tres bien trie"="green4"))+
+  labs(color = "Interprétation")+
+  ggtitle("Evolution de l'indice de tri de Folk & Ward en fonction du temps")+
+  theme(plot.title = element_text(hjust = 0.5))
+  
+```
+
+## 4) Métriques relatives aux berges du cours d'eau 
+
+Les métriques présentées dans cette partie sont : 
+
+- Le **score ripisylve** : il donne une indication sur l'état de la ripisylve. Plus le score est élevé, plus la végétation est épaisse, haute et continue (longitudinalement). 
+- Le **% de berges artificialisées** : il donne une indication sur le degrés d'artificialisation de la station. 
+
+Pour aider l'interprétation du score ripisylve, les types de végétation suivants sont présentés (basés sur l'ancienne classification Carhyce de la ripisylve et sur les travaux de la Direction Générale de l'OFB et le CNRS sur les données Carhcye) : 
+
+- Ripisylve **herbacée** : score ripisylve **< 0,1** 
+- Ripisylve **buissonnante** : score ripisylve **entre 0,1 et 0,4** 
+- Ripisylve de type **rideau d'arbres** : score ripisylve **entre 0,4 et 0,7**
+- Ripisylve de type **boisement alluvial** : score ripisylve **>= 0,7**
+
+```{r type ripisylve}
+
+df_carhyce<-df_carhyce %>% 
+  mutate(type_ripisylve= case_when(
+    score_ripisylve < 0.1 ~ "herbacée",
+    
+    score_ripisylve >= 0.1 &
+      score_ripisylve < 0.4 ~ "buissonnante",
+    
+    score_ripisylve >= 0.4 &
+      score_ripisylve < 0.7 ~ "rideau d'arbres",
+    
+    score_ripisylve >= 0.7 ~ "boisement alluvial" 
+  )) %>% 
+  mutate(type_ripisylve = fct_relevel(type_ripisylve, "herbacée", "buissonnante", 
+                                      "rideau d'arbres", "boisement alluvial"))
+
+```
+
+```{r graph ripisylve}
+
+df_carhyce %>% 
+  drop_na(score_ripisylve) %>% 
+  ggplot(aes(x=date_realisation, y=score_ripisylve, color=type_ripisylve))+
+  geom_point(size=4)+
+  geom_line(color="black", linetype = "dashed")+
+  ylim(0,1.5)+
+  xlab("Date")+
+  ylab("Score ripisylve (sans unité)")+
+  ggtitle("Evolution du score ripisylve en fonction du temps")+
+  theme(plot.title = element_text(hjust = 0.5))+
+  scale_color_manual(values= c("herbacée"="lightyellow2", 
+                               "buissonnante"="greenyellow", 
+                               "rideau d'arbres"="green", 
+                               "boisement alluvial"="green4" 
+                               ))+
+  theme(panel.background = element_rect(fill = "grey"),
+        legend.key = element_rect(fill = "grey"))
+```
+
+```{r calcul artificialisation}
+
+df_carhyce<-df_carhyce %>% 
+  mutate(pourcentage_artif=(nombre_de_berges_artificialisees/nombre_de_berges_total)*100)
+```
+
+```{r}
+df_carhyce %>% 
+  ggplot(aes(x=date_realisation, y=pourcentage_artif))+
+  geom_point(size=4)+
+  geom_line(color="black", linetype = "dashed")+
+  ylim(0,100)+
+  xlab("Date")+
+  ylab("% berges artificialisées")+
+  ggtitle("Evolution de l'artificialité des berges en fonction du temps")+
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+# III) Observations supplémentaires éventuelles (Carhyce) 
+
+[Note :]{.underline} Cette section peut être vide si aucune observation particulière n'a été notée lors des prospections Carhyce. 
+
+- Observations générales : 
+```{r}
+df_carhyce %>% 
+  select(date_realisation, observations) %>% 
+  filter(observations != "") %>% 
+  kbl() %>% 
+  kable_styling()
+```
+
+- Observations concernant les habitats marginaux : 
+```{r}
+df_carhyce %>% 
+  select(date_realisation, description_habitat_marginaux) %>% 
+  filter(description_habitat_marginaux != "") %>% 
+  kbl() %>% 
+  kable_styling()
+```
